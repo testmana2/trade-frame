@@ -18,32 +18,18 @@
 
 #include <boost/signals2.hpp>
 
-//#include <wx/panel.h>
-#include <wx/window.h>
-
 #include <TFBitsNPieces/TreeOpsItems.h>
 
-#include "InstrumentInfo.h"
+#include "InstrumentActions.h"
 
 struct Resources {
 
-  //wxWindow* m_pWin;  // is this used somewhere?  maybe is the charting window, which is now in InstrumentInfo
+  typedef InstrumentActions::pInstrumentActions_t pInstrumentActions_t;
   
-  //typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
-  typedef InstrumentInfo::pInstrumentInfo_t pInstrumentInfo_t;
-  
-  enum ENewInstrumentLock { NoLock, LockOption, LockFuturesOption };
-  
-  // used in TreeItemInstrument
-  typedef boost::signals2::signal<pInstrumentInfo_t (ENewInstrumentLock), ou::tf::FirstOrDefault<pInstrumentInfo_t> > signalNewInstrumentInfo_t;
-  typedef signalNewInstrumentInfo_t::slot_type slotNewInstrumentInfo_t;
-  signalNewInstrumentInfo_t signalNewInstrumentViaDialog;
-  
-  typedef boost::signals2::signal<pInstrumentInfo_t (const std::string&), ou::tf::FirstOrDefault<pInstrumentInfo_t> > signalLoadInstrumentInfo_t;
-  typedef signalLoadInstrumentInfo_t::slot_type slotLoadInstrumentInfo_t;
-  signalLoadInstrumentInfo_t signalLoadInstrument;
-  
-  //Resources( void ): m_pWin( 0 ) {}
+  typedef boost::signals2::signal<pInstrumentActions_t (const wxTreeItemId&), 
+                                     ou::tf::FirstOrDefault<pInstrumentActions_t> > signalGetInstrumentActions_t;
+  typedef signalGetInstrumentActions_t::slot_type slotInstrumentActions_t;
+  signalGetInstrumentActions_t signalGetInstrumentActions;
 };
 
 // ================

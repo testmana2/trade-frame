@@ -13,7 +13,7 @@
  ************************************************************************/
 
 // Started 2013/09/29
-// Taken from Strateg1/Strategy.h
+// Taken from Strategy1/Strategy.h
 
 // used as a base class for super-classes, which would add additional indicators to the existing ones.
 
@@ -42,11 +42,11 @@
 
 namespace ou { // One Unified
 
-class ChartDataBase {
+class ChartDVBasics {
 public:
 
-  ChartDataBase(void);
-  virtual ~ChartDataBase(void);
+  ChartDVBasics(void);
+  virtual ~ChartDVBasics(void);
 
   ou::ChartDataView& GetChartDataView( void ) { return m_dvChart; };
 

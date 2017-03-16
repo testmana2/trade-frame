@@ -25,14 +25,18 @@
 #include <wx/panel.h>
 #include <wx/event.h>
 
+#include <OUCharting/ChartDVBasics.h>
+
 #include <TFBitsNPieces/TreeOps.h>
 #include <TFVuTrading/DialogPickSymbol.h>
+#include <TFVuTrading/WinChartView.h>
 
 #include <TFTrading/ProviderManager.h>
+#include <TFTrading/Watch.h>
 
-#include "InstrumentInfo.h"
 #include "TreeItem.h"
-#include "ChartInteractive.h"
+#include "InstrumentActions.h"
+
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
@@ -47,7 +51,7 @@ class PanelCharts: public wxPanel {
 public:
   
   typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
-  typedef InstrumentInfo::pInstrumentInfo_t pInstrumentInfo_t;
+  typedef ou::tf::Watch::pWatch_t pWatch_t;
   
   PanelCharts( void );
   PanelCharts( wxWindow* parent, wxWindowID id = SYMBOL_PANEL_CHARTS_IDNAME, 
@@ -91,8 +95,12 @@ public:
 
   void InstrumentUpdated( pInstrument_t ); // typically:  the ib contract has arrived
   
+  // providers may change, so what happens to providers already registered with an instrument?
   typedef ou::tf::ProviderManager::pProvider_t pProvider_t;
   void SetProviders( pProvider_t pData1Provider, pProvider_t pData2Provider, pProvider_t pExecutionProvider );
+  
+  //void StartWatch( void );
+  //void StopWatch( void );
 
   void Save( boost::archive::text_oarchive& oa);
   void Load( boost::archive::text_iarchive& ia);
@@ -109,8 +117,50 @@ private:
     MIRoot, MIGroup, MIInstrument, MIPortfolio, MIPosition
   };
   
-  typedef std::map<ou::tf::Instrument::idInstrument_t,pInstrumentInfo_t> mapInstrumentInfo_t;
-  mapInstrumentInfo_t m_mapInstrumentInfo;
+  typedef InstrumentActions::pInstrumentActions_t pInstrumentActions_t;
+  
+  pInstrumentActions_t m_pInstrumentActions;
+  
+  struct WatchInfo {
+  private:
+    bool m_bActive;
+    pWatch_t m_pWatch;
+    ou::ChartDVBasics m_cdb; // has indicators and dataview
+  public:
+    WatchInfo( void ): m_bActive( false ) {}
+    void Set( pWatch_t pWatch ) {
+      if ( m_bActive ) {
+	std::cout << "WatchInfo::Set menu item already activated" << std::endl;
+      }
+      else {
+	m_bActive = true;
+	m_pWatch = pWatch;
+	m_pWatch->OnQuote.Add( MakeDelegate( &m_cdb, &ou::ChartDVBasics::HandleQuote ) );
+	m_pWatch->OnTrade.Add( MakeDelegate( &m_cdb, &ou::ChartDVBasics::HandleTrade ) );
+	m_pWatch->StartWatch();
+      }
+    }
+    void EmitValues( void ) { m_pWatch->EmitValues(); }
+    ou::ChartDataView& GetChartDataView( void ) { return m_cdb.GetChartDataView(); }
+    ~WatchInfo( void ) {
+      if ( 0 != m_pWatch.use_count() ) {
+	if ( m_bActive ) {
+	  m_pWatch->StopWatch();
+	  m_pWatch->OnQuote.Remove( MakeDelegate( &m_cdb, &ou::ChartDVBasics::HandleQuote ) );
+	  m_pWatch->OnTrade.Remove( MakeDelegate( &m_cdb, &ou::ChartDVBasics::HandleTrade ) );
+	  m_bActive = false;
+	}
+      }
+    }
+  };
+  
+  typedef boost::shared_ptr<WatchInfo> pWatchInfo_t;
+  
+  typedef std::map<void*,pWatchInfo_t> mapWatchInfo_t; // void* is from wxTreeItemId.GetID()
+  mapWatchInfo_t m_mapWatchInfo;
+  
+  typedef std::map<ou::tf::Instrument::idInstrument_t,pWatch_t> mapInstrumentWatch_t;
+  mapInstrumentWatch_t m_mapInstrumentWatch;
   
   pProvider_t m_pData1Provider;
   pProvider_t m_pData2Provider;
@@ -124,17 +174,26 @@ private:
   DialogPickSymbol::DataExchange m_de;
   pInstrument_t m_pDialogPickSymbolCreatedInstrument;
   
-  ChartInteractive* m_pChartInteractive;
+  WinChartView* m_pWinChartView;
+  
+  void HandleTreeOpsChanging( wxTreeItemId id );
   
   void HandleLookUpDescription( const std::string&, std::string& );
   
-  pInstrumentInfo_t HandleNewInstrumentRequest( void );
+  InstrumentActions::values_t HandleNewInstrumentRequest( const wxTreeItemId& item, const InstrumentActions::ENewInstrumentLock );
   void HandleComposeComposite( ou::tf::DialogPickSymbol::DataExchange* );
   
-  pInstrumentInfo_t HandleLoadInstrument( const std::string& );
-  pInstrumentInfo_t LoadInstrument( pInstrument_t );
+  void HandleLoadInstrument( const wxTreeItemId& item, const std::string& );
+  pWatch_t ConstructWatch( pInstrument_t );
+  
+  void HandleInstrumentLiveChart( const wxTreeItemId& );
+  void HandleEmitValues( const wxTreeItemId& );
+  
+  void HandleMenuItemDelete( const wxTreeItemId& id );
   
   void BuildInstrument( const DialogPickSymbol::DataExchange& pde, pInstrument_t& pInstrument );
+  
+  pInstrumentActions_t HandleGetInstrumentActions( const wxTreeItemId& );
 
   void OnClose( wxCloseEvent& event );
   

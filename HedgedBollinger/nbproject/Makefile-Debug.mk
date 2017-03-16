@@ -35,7 +35,6 @@ OBJECTDIR=${CND_BUILDDIR}/${CND_CONF}/${CND_PLATFORM}
 
 # Object Files
 OBJECTFILES= \
-	${OBJECTDIR}/EventDrawChart.o \
 	${OBJECTDIR}/EventUpdateOptionTree.o \
 	${OBJECTDIR}/HedgedBollinger.o \
 	${OBJECTDIR}/PositionState.o \
@@ -95,32 +94,27 @@ ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/hedgedbollinger: ${OBJECTFILES}
 	${MKDIR} -p ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}
 	${LINK.cc} -o ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/hedgedbollinger ${OBJECTFILES} ${LDLIBSOPTIONS} `/usr/local/bin/wx-config --libs`
 
-${OBJECTDIR}/EventDrawChart.o: EventDrawChart.cpp 
-	${MKDIR} -p ${OBJECTDIR}
-	${RM} "$@.d"
-	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/EventDrawChart.o EventDrawChart.cpp
-
-${OBJECTDIR}/EventUpdateOptionTree.o: EventUpdateOptionTree.cpp 
+${OBJECTDIR}/EventUpdateOptionTree.o: EventUpdateOptionTree.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} "$@.d"
 	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/EventUpdateOptionTree.o EventUpdateOptionTree.cpp
 
-${OBJECTDIR}/HedgedBollinger.o: HedgedBollinger.cpp 
+${OBJECTDIR}/HedgedBollinger.o: HedgedBollinger.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} "$@.d"
 	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/HedgedBollinger.o HedgedBollinger.cpp
 
-${OBJECTDIR}/PositionState.o: PositionState.cpp 
+${OBJECTDIR}/PositionState.o: PositionState.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} "$@.d"
 	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/PositionState.o PositionState.cpp
 
-${OBJECTDIR}/Strategy1.o: Strategy1.cpp 
+${OBJECTDIR}/Strategy1.o: Strategy1.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} "$@.d"
 	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/Strategy1.o Strategy1.cpp
 
-${OBJECTDIR}/stdafx.o: stdafx.cpp 
+${OBJECTDIR}/stdafx.o: stdafx.cpp
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} "$@.d"
 	$(COMPILE.cc) -g -D_DEBUG -DwxUSE_GUI -I../lib -std=c++11 -MMD -MP -MF "$@.d" -o ${OBJECTDIR}/stdafx.o stdafx.cpp
@@ -145,7 +139,6 @@ ${OBJECTDIR}/stdafx.o: stdafx.cpp
 # Clean Targets
 .clean-conf: ${CLEAN_SUBPROJECTS}
 	${RM} -r ${CND_BUILDDIR}/${CND_CONF}
-	${RM} ${CND_DISTDIR}/${CND_CONF}/${CND_PLATFORM}/hedgedbollinger
 
 # Subprojects
 .clean-subprojects:

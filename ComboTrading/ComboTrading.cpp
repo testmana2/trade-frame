@@ -184,8 +184,8 @@ bool AppComboTrading::OnInit() {
     std::cout << "database fault on " << m_sDbName << std::endl;
   }
 
-  m_bData1Connected = false;
-  m_bExecConnected = false;
+  //m_bData1Connected = false;
+  //m_bExecConnected = false;
   m_bStarted = false;
 
   m_dblMinPL = m_dblMaxPL = 0.0;
@@ -223,6 +223,7 @@ bool AppComboTrading::OnInit() {
   
   BuildFrameCharts();
   BuildFrameInteractiveBrokers();
+  //BuildFramePortfolioPosition();
 
   return 1;
 
@@ -392,6 +393,23 @@ void AppComboTrading::Start( void ) {
     }
 
     m_bStarted = true;
+  }
+}
+
+void AppComboTrading::Stop( void ) {
+  if ( m_bStarted ) {  
+    ou::tf::PortfolioManager& pm( ou::tf::PortfolioManager::GlobalInstance() );
+    pm.OnPortfolioLoaded.Remove( MakeDelegate( this, &AppComboTrading::HandlePortfolioLoad ) );
+    pm.OnPositionLoaded.Remove( MakeDelegate( this, &AppComboTrading::HandlePositionLoad ) );
+
+    //if ( 0 != m_pFPPOE ) {
+      //m_pFPPOE->Update();
+      //m_pFPPOE->Refresh();
+      //m_pFPPOE->SetAutoLayout( true );
+      //m_pFPPOE->Layout();  
+    //}
+
+    m_bStarted = false;
   }
 }
 
@@ -575,9 +593,14 @@ void AppComboTrading::TestSymbols( void ) {
 }
 
 void AppComboTrading::GetContractFor( const std::string& sBaseName, pInstrument_t pInstrument ) {
-  m_tws->RequestContractDetails( 
-    sBaseName, pInstrument,
-    MakeDelegate( this, &AppComboTrading::HandleIBContractDetails ), MakeDelegate( this, &AppComboTrading::HandleIBContractDetailsDone ) );
+  if ( m_bIBConnected ) {
+    m_tws->RequestContractDetails( 
+      sBaseName, pInstrument,
+      MakeDelegate( this, &AppComboTrading::HandleIBContractDetails ), MakeDelegate( this, &AppComboTrading::HandleIBContractDetailsDone ) );
+  }
+  else {
+    std::cout << "AppComboTrading::GetContractFor: IB Not Connected" << std::endl;
+  }
 }
 
 // futures expire: 17:15 est
@@ -927,16 +950,21 @@ void AppComboTrading::HandlePanelNewOrder( const ou::tf::PanelManualOrder::Order
 void AppComboTrading::HandlePanelSymbolText( const std::string& sName ) {
   // need to fix to handle equity, option, future, etc.  merge with code from above so common code usage
   // 2014/09/30 maybe need to disable this panel, as the order doesn't land in an appropriate portfolio or position.
-  ou::tf::IBTWS::Contract contract;
-  contract.currency = "USD";
-  contract.exchange = "SMART";
-  contract.secType = "STK";
-  contract.symbol = sName;
-  // IB responds only when symbol is found, bad symbols will not illicit a response
-//  m_pPanelManualOrder->SetInstrumentDescription( "" );
-  m_tws->RequestContractDetails( 
-    contract, 
-    MakeDelegate( this, &AppComboTrading::HandleIBContractDetails ), MakeDelegate( this, &AppComboTrading::HandleIBContractDetailsDone ) );
+  if ( m_bIBConnected ) {
+    ou::tf::IBTWS::Contract contract;
+    contract.currency = "USD";
+    contract.exchange = "SMART";
+    contract.secType = "STK";
+    contract.symbol = sName;
+    // IB responds only when symbol is found, bad symbols will not illicit a response
+    //  m_pPanelManualOrder->SetInstrumentDescription( "" );
+    m_tws->RequestContractDetails( 
+      contract, 
+      MakeDelegate( this, &AppComboTrading::HandleIBContractDetails ), MakeDelegate( this, &AppComboTrading::HandleIBContractDetailsDone ) );
+  }
+  else {
+    std::cout << "AppComboTrading::HandlePanelSymbolText: IB Not Connected" << std::endl;
+  }
 }
 
 void AppComboTrading::HandlePanelFocusPropogate( unsigned int ix ) {
@@ -994,26 +1022,50 @@ int AppComboTrading::OnExit() {
   return wxApp::OnExit();
 }
 
-void AppComboTrading::OnData1Connected( int ) {
-  m_bData1Connected = true;
+// this probably isn't in the gui thread
+void AppComboTrading::OnData1Connecting( int status ) {
+  m_pPanelCharts->SetProviders( m_pData1Provider, m_pData2Provider, m_pExecutionProvider );
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnData1Connected( int status ) {
   if ( m_bData1Connected & m_bExecConnected ) {
-    // set start to enabled
+    Start();
+  }
+  //m_pPanelCharts->StartWatch();
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnData1Disconnecting( int status ) {
+  //m_pPanelCharts->StopWatch();
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnData1Disconnected( int status ) {
+  if ( !m_bData1Connected & !m_bExecConnected ) {
+    Stop();
+  }
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnExecConnecting( int status ) {
+  m_pPanelCharts->SetProviders( m_pData1Provider, m_pData2Provider, m_pExecutionProvider );
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnExecConnected( int status ) {
+  if ( m_bData1Connected & m_bExecConnected ) {
     Start();
   }
 }
 
-void AppComboTrading::OnExecConnected( int ) {
-  m_bExecConnected = true;
-  if ( m_bData1Connected & m_bExecConnected ) {
-    // set start to enabled
-    Start();
+// this probably isn't in the gui thread
+void AppComboTrading::OnExecDisconnecting( int status ) {
+}
+
+// this probably isn't in the gui thread
+void AppComboTrading::OnExecDisconnected( int status ) {
+  if ( !m_bData1Connected & !m_bExecConnected ) {
+    Stop();
   }
-}
-
-void AppComboTrading::OnData1Disconnected( int ) {
-  m_bData1Connected = false;
-}
-
-void AppComboTrading::OnExecDisconnected( int ) {
-  m_bExecConnected = false;
 }

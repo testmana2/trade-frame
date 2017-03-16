@@ -36,10 +36,10 @@
 
 #include <TFOptions/Bundle.h>
 
-#include <OUCharting/ChartDataBase.h>
+#include <OUCharting/ChartDVBasics.h>
 
 class Strategy: 
-  public ou::ChartDataBase,
+  public ou::ChartDVBasics,
   public ou::tf::DailyTradeTimeFrame<Strategy>
 {
   friend ou::tf::DailyTradeTimeFrame<Strategy>; 
@@ -99,7 +99,7 @@ private:
   ou::tf::OrdersOutstandingLongs* m_pOrdersOutstandingLongs;
   ou::tf::OrdersOutstandingShorts* m_pOrdersOutstandingShorts;
 
-  ou::ChartDataBase m_ChartDataUnderlying;
+  //ou::ChartDataBase m_ChartDataUnderlying;
 
   int m_nLongs;
   int m_nShorts;

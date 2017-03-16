@@ -16,14 +16,14 @@
 
 #include <OUCommon/Colour.h>
 
-#include "ChartDataBase.h"
+#include "ChartDVBasics.h"
 
 namespace ou { // One Unified
 
 // 55, 89, 144, 233, 377, 610, 987, 1597, 2584, 4181, 6765
 // .91 1.5 2.4  3.9, 6.3, 10.2 16.5 26.6  54.0  69.7  112.8
 
-ChartDataBase::ChartDataBase(void) 
+ChartDVBasics::ChartDVBasics(void) 
   : m_dvChart(),
   m_bfTrades( 10 ),
   m_bfBuys( 10 ),
@@ -117,26 +117,26 @@ ChartDataBase::ChartDataBase(void)
 
   m_ceZigZag.SetColour( ou::Colour::DarkBlue );
 
-  m_bfTrades.SetOnBarComplete( MakeDelegate( this, &ChartDataBase::HandleBarCompletionTrades ) );
-  m_bfBuys.SetOnBarComplete( MakeDelegate( this, &ChartDataBase::HandleBarCompletionBuys ) );
-  m_bfSells.SetOnBarComplete( MakeDelegate( this, &ChartDataBase::HandleBarCompletionSells ) );
+  m_bfTrades.SetOnBarComplete( MakeDelegate( this, &ChartDVBasics::HandleBarCompletionTrades ) );
+  m_bfBuys.SetOnBarComplete( MakeDelegate( this, &ChartDVBasics::HandleBarCompletionBuys ) );
+  m_bfSells.SetOnBarComplete( MakeDelegate( this, &ChartDVBasics::HandleBarCompletionSells ) );
 
-  m_zigzagPrice.SetOnPeakFound( MakeDelegate( this, &ChartDataBase::HandleZigZagPeak ) );
-  m_zigzagPrice.SetUpDecisionPointFound( MakeDelegate( this, &ChartDataBase::HandleZigZagUpDp ) );
-  m_zigzagPrice.SetDnDecisionPointFound( MakeDelegate( this, &ChartDataBase::HandleZigZagDnDp ) );
+  m_zigzagPrice.SetOnPeakFound( MakeDelegate( this, &ChartDVBasics::HandleZigZagPeak ) );
+  m_zigzagPrice.SetUpDecisionPointFound( MakeDelegate( this, &ChartDVBasics::HandleZigZagUpDp ) );
+  m_zigzagPrice.SetDnDecisionPointFound( MakeDelegate( this, &ChartDVBasics::HandleZigZagDnDp ) );
 }
 
-ChartDataBase::~ChartDataBase(void) { 
+ChartDVBasics::~ChartDVBasics(void) { 
   m_bfTrades.SetOnBarComplete( 0 );
   m_bfBuys.SetOnBarComplete( 0 );
   m_bfSells.SetOnBarComplete( 0 );
 }
 
-void ChartDataBase::HandleBarCompletionTrades( const ou::tf::Bar& bar ) {
+void ChartDVBasics::HandleBarCompletionTrades( const ou::tf::Bar& bar ) {
   m_ceBars.AppendBar( bar );
 }
 
-void ChartDataBase::HandleBarCompletionBuys( const ou::tf::Bar& bar ) {
+void ChartDVBasics::HandleBarCompletionBuys( const ou::tf::Bar& bar ) {
 
   ptime dt( bar.DateTime() );
 
@@ -159,7 +159,7 @@ void ChartDataBase::HandleBarCompletionBuys( const ou::tf::Bar& bar ) {
   }
 }
 
-void ChartDataBase::HandleBarCompletionSells( const ou::tf::Bar& bar ) {
+void ChartDVBasics::HandleBarCompletionSells( const ou::tf::Bar& bar ) {
 
   ptime dt( bar.DateTime() );
 
@@ -182,18 +182,18 @@ void ChartDataBase::HandleBarCompletionSells( const ou::tf::Bar& bar ) {
   }
 }
 
-void ChartDataBase::HandleZigZagPeak( const ou::tf::ZigZag&, ptime dt, double price, ou::tf::ZigZag::EDirection ) {
+void ChartDVBasics::HandleZigZagPeak( const ou::tf::ZigZag&, ptime dt, double price, ou::tf::ZigZag::EDirection ) {
   m_ceZigZag.Append( dt, price );
   //m_zigzagPrice.SetFilterWidth( 0.17 * sqrt( price ) );
 }
 
-void ChartDataBase::HandleZigZagUpDp( const ou::tf::ZigZag& ) {
+void ChartDVBasics::HandleZigZagUpDp( const ou::tf::ZigZag& ) {
 }
 
-void ChartDataBase::HandleZigZagDnDp( const ou::tf::ZigZag& ) {
+void ChartDVBasics::HandleZigZagDnDp( const ou::tf::ZigZag& ) {
 }
 
-void ChartDataBase::HandleTrade( const ou::tf::Trade& trade ) {
+void ChartDVBasics::HandleTrade( const ou::tf::Trade& trade ) {
 
   ptime dt( trade.DateTime() );
   ou::tf::Trade::price_t price = trade.Price();
@@ -235,7 +235,7 @@ void ChartDataBase::HandleTrade( const ou::tf::Trade& trade ) {
         m_dblUpVolume += trade.Volume();
       }
       else {
-        m_TradeDirection = ETradeDirDn;  // definitively dow
+        m_TradeDirection = ETradeDirDn;  // definitively down
         //--m_dblMdTicks;
         m_pricesTickDiffs.Append( ou::tf::Price( dt, -1.0 ) );
         ++m_dblDnTicks;
@@ -268,11 +268,10 @@ void ChartDataBase::HandleTrade( const ou::tf::Trade& trade ) {
     if ( -45 > dif ) dif = -45;
     m_ceTickDiffsRoc.Append( dt, dif );
   }
-
   
 }
 
-void ChartDataBase::HandleQuote( const ou::tf::Quote& quote ) {
+void ChartDVBasics::HandleQuote( const ou::tf::Quote& quote ) {
 
   if ( !quote.IsValid() ) {
     return;
@@ -336,10 +335,6 @@ void ChartDataBase::HandleQuote( const ou::tf::Quote& quote ) {
     }
 
   }
-
-//  if ( 500 < m_quotes.Size() ) {
-//  }
-
 }
 
 
