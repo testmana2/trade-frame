@@ -23,7 +23,7 @@ namespace tf { // TradeFrame
 ControllerPortfolioPositionOrderExecution::ControllerPortfolioPositionOrderExecution( MPPOE_t* pMPPOE, PPPOE_t* pPPPOE  ) 
   : m_pMPPOE( pMPPOE ), m_pPPPOE( pPPPOE )
 {
-  m_pMPPOE->LoadMasterPortfolio();
+  //m_pMPPOE->LoadMasterPortfolio();
   m_pPPPOE->GetTree()->Bind( wxEVT_COMMAND_DATAVIEW_SELECTION_CHANGED, &ControllerPortfolioPositionOrderExecution::HandleDVSelectionChanged, this );
   m_pPPPOE->GetTree()->Bind( wxEVT_COMMAND_DATAVIEW_ITEM_COLLAPSED, &ControllerPortfolioPositionOrderExecution::HandleDVItemCollapsed, this );
   m_pPPPOE->GetTree()->Bind( wxEVT_COMMAND_DATAVIEW_ITEM_EXPANDED, &ControllerPortfolioPositionOrderExecution::HandleDVItemExpanded, this );
@@ -70,19 +70,19 @@ ControllerPortfolioPositionOrderExecution::~ControllerPortfolioPositionOrderExec
 }
 
 void ControllerPortfolioPositionOrderExecution::LoadInitialData( void ) {
-  ou::tf::PortfolioManager::Instance().LoadActivePortfolios();
+  ou::tf::PortfolioManager::GlobalInstance().LoadActivePortfolios();
 }
 
 void ControllerPortfolioPositionOrderExecution::HandlePanelPortfolioPositionOrderExecutionClose( PanelPortfolioPositionOrderExecution* ) {
-  m_pMPPOE = 0;
-  m_pPPPOE = 0;
+  m_pMPPOE = nullptr;
+  m_pPPPOE = nullptr;
   // also maybe set a flag for runtime issue checking
   // but not much more can happen with out event stimulus from the panel
 }
 
 void ControllerPortfolioPositionOrderExecution::HandleDVSelectionChanged( wxDataViewEvent& event ) {
   m_dvLastClickedItem = event.GetItem();
-  m_pMPPOE->ClickedOnTreeItem( m_dvLastClickedItem.GetID() );
+  m_pMPPOE->ClickedOnTreeItem( reinterpret_cast<DataViewItemBase*>( m_dvLastClickedItem.GetID() ) );
 }
 
 void ControllerPortfolioPositionOrderExecution::HandleDVItemCollapsed( wxDataViewEvent& event ) {

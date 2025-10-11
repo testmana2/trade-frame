@@ -24,25 +24,28 @@
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-template<class T, class D>   // 
+template<class T, class D>   //
 //class TimeSeriesSlidingWindow: public TimeSeries<D> { // T=CRTP class for Add, Expire, PostUpdate; D=DatedDatum
   // the TimeSeries<D> isn't actually used, could use it, I suppose, but is there in order to recurse additional indicators
 class TimeSeriesSlidingWindow { // T=CRTP class for Add, Expire, PostUpdate; D=DatedDatum
 public:
-  typedef typename TimeSeries<D>::size_type size_type;
+  using size_type = typename TimeSeries<D>::size_type;
   TimeSeriesSlidingWindow<T,D>( TimeSeries<D>& Series, time_duration tdWindowWidth, size_type WindowSizeCount = 0 );
+  TimeSeriesSlidingWindow<T,D>( TimeSeries<D>& Series, size_t nPeriods, time_duration tdPeriodWidth, size_type WindowSizeCount = 0 );
   TimeSeriesSlidingWindow<T,D>( const TimeSeriesSlidingWindow<T,D>& );  // Delegate is not copied, other values may need some tuning
-  virtual ~TimeSeriesSlidingWindow<T,D>(void);
-  void Update( void );
-  virtual void Reset( void );
+  TimeSeriesSlidingWindow<T,D>( TimeSeriesSlidingWindow<T,D>&& ); // limited to the initial emplace operations
+  virtual ~TimeSeriesSlidingWindow<T,D>();
+  virtual void Reset();
   ou::Delegate<const D&> OnAppend;
 protected:
   ptime m_dtZero;  // datetime of first element, used as offset
-  time_duration WindowWidth( void ) const { return m_tdWindowWidth; };
+  time_duration WindowWidth() const { return m_tdWindowWidth; };
+
+  void Update();
 
   void Add( const D& datum ) {}; // CRTP override to process elements passing into window scope
-  void Expire( const D& datum ) {};  // CRTP override to process elements passing out of window scope 
-  void PostUpdate( void ) {};  // CRTP override to do final calcs
+  void Expire( const D& datum ) {};  // CRTP override to process elements passing out of window scope
+  void PostUpdate() {};  // CRTP override to do final calcs
 private:
   TimeSeries<D>& m_Series;
   time_duration m_tdWindowWidth;
@@ -51,16 +54,16 @@ private:
   size_type m_ixLeading;  // index to vector end of datums to be processed in
   ptime m_dtLeading;
   bool m_bFirstDatumFound;
-  bool m_bAutoUpdate; // use the OnAppend event to update stuff, else ue the Update method to process
+  bool m_bAutoUpdate; // use the OnAppend event to update stuff, else use the Update method to process
 
-  void Init( void );  // called in constructors
+  void Init();  // called in constructors
   void HandleDatum( const D& );
 };
 
-template<class T, class D> 
-TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow( 
-  TimeSeries<D>& Series, time_duration tdWindowWidth, size_type WindowSizeCount ) 
-: m_Series( Series ), //m_iterTrailing( Series.begin() ), 
+template<class T, class D>
+TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow(
+  TimeSeries<D>& Series, time_duration tdWindowWidth, size_type WindowSizeCount )
+: m_Series( Series ), //m_iterTrailing( Series.begin() ),
   m_ixTrailing( 0 ), m_ixLeading( 0 ), m_dtLeading( not_a_date_time ),
   m_tdWindowWidth( tdWindowWidth ), m_nWindowSizeCount( WindowSizeCount ),
   m_bFirstDatumFound( false ), m_bAutoUpdate( true )
@@ -70,10 +73,29 @@ TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow(
   Init();
 }
 
+template<class T, class D>
+TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow(
+  TimeSeries<D>& Series, size_t nPeriods, time_duration tdPeriodWidth, size_type WindowSizeCount )
+: m_Series( Series ), //m_iterTrailing( Series.begin() ),
+  m_ixTrailing( 0 ), m_ixLeading( 0 ), m_dtLeading( not_a_date_time ),
+  m_tdWindowWidth( tdPeriodWidth ), m_nWindowSizeCount( WindowSizeCount ),
+  m_bFirstDatumFound( false ), m_bAutoUpdate( true )
+{
+  assert( seconds( 0 ) <= tdPeriodWidth );
+  assert( 0 <= WindowSizeCount );
+  assert( 0 < nPeriods );
+  time_duration tdSum {};
+  while ( 0 != nPeriods ) {
+    tdSum += tdPeriodWidth;
+    nPeriods--;
+  }
+  m_tdWindowWidth = tdSum;
+  Init();
+}
 
-template<class T, class D> 
-TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow( const TimeSeriesSlidingWindow<T,D>& rhs ) 
-  : m_Series( rhs.m_Series ), 
+template<class T, class D>
+TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow( const TimeSeriesSlidingWindow<T,D>& rhs )
+  : m_Series( rhs.m_Series ),
   m_tdWindowWidth( rhs.m_tdWindowWidth ), m_nWindowSizeCount( rhs.m_nWindowSizeCount ),
   m_ixTrailing( rhs.m_ixTrailing ), m_ixLeading( rhs.m_ixLeading ), m_dtLeading( rhs.m_dtLeading ),
   m_bFirstDatumFound( rhs.m_bFirstDatumFound ), m_dtZero( rhs.m_dtZero ), m_bAutoUpdate( true )
@@ -82,24 +104,36 @@ TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow( const TimeSeriesSlidingWi
   Init();
 }
 
-template<class T, class D> 
-TimeSeriesSlidingWindow<T,D>::~TimeSeriesSlidingWindow(void) {
+template<class T, class D>
+TimeSeriesSlidingWindow<T,D>::TimeSeriesSlidingWindow( TimeSeriesSlidingWindow<T,D>&& rhs )
+: m_Series( std::move( rhs.m_Series ) )
+, m_tdWindowWidth( rhs.m_tdWindowWidth ), m_nWindowSizeCount( rhs.m_nWindowSizeCount )
+, m_ixTrailing( rhs.m_ixTrailing ), m_ixLeading( rhs.m_ixLeading ), m_dtLeading( rhs.m_dtLeading )
+, m_bFirstDatumFound( rhs.m_bFirstDatumFound ), m_dtZero( rhs.m_dtZero ), m_bAutoUpdate( true )
+, OnAppend( std::move( rhs.OnAppend ) )
+{
+  // best used when originating timeseries is empty
+  Init();
+}
+
+template<class T, class D>
+TimeSeriesSlidingWindow<T,D>::~TimeSeriesSlidingWindow() {
   m_Series.OnAppend.Remove( MakeDelegate( this, &TimeSeriesSlidingWindow<T,D>::HandleDatum ) );
 }
 
-template<class T, class D> 
-void TimeSeriesSlidingWindow<T,D>::Init(void) {
+template<class T, class D>
+void TimeSeriesSlidingWindow<T,D>::Init() {
   m_Series.OnAppend.Add( MakeDelegate( this, &TimeSeriesSlidingWindow<T,D>::HandleDatum ) );
 }
 
-template<class T, class D> 
-void TimeSeriesSlidingWindow<T,D>::Reset( void ) {
+template<class T, class D>
+void TimeSeriesSlidingWindow<T,D>::Reset() {
   m_ixTrailing = m_ixLeading = 0;
   m_dtLeading = not_a_date_time;
 }
 
-template<class T, class D> 
-void TimeSeriesSlidingWindow<T,D>::Update( void ) {
+template<class T, class D>
+void TimeSeriesSlidingWindow<T,D>::Update() {
   if ( !m_bFirstDatumFound ) {
     if ( 0 < m_Series.Size() ) {
       m_dtZero = m_Series[ 0 ].DateTime();  // used for zeroing the statistics
@@ -113,7 +147,7 @@ void TimeSeriesSlidingWindow<T,D>::Update( void ) {
     if ( &TimeSeriesSlidingWindow<T,D>::Add != &T::Add ) {
       static_cast<T*>( this )->Add( datum ); // add datum to stats
     }
-    
+
     ++m_ixLeading;
     bMovedIndex = true;
   }
@@ -144,7 +178,7 @@ void TimeSeriesSlidingWindow<T,D>::Update( void ) {
   }
 }
 
-template<class T, class D> 
+template<class T, class D>
 void TimeSeriesSlidingWindow<T,D>::HandleDatum( const D& datum ) {
   if ( m_bAutoUpdate ) Update();
   OnAppend( datum );
@@ -161,13 +195,13 @@ public:
   TimeSeriesSlidingWindowQuoteMidPoint<T>( TimeSeries<Quote> *pSeries, long WindowSizeSeconds = 0, size_t WindowSizeCount = 0 )
     : TimeSeriesSlidingWindow<T, Quote>( pSeries, WindowSizeSeconds, WindowSizeCount ) {
   };
-  ~TimeSeriesSlidingWindowQuoteMidPoint<T>( void );
+  ~TimeSeriesSlidingWindowQuoteMidPoint<T>();
 protected:
   void Add( const Quote &datum ) { // CRTP override to process elements passing into window scope
   };
-  void Expire( const Quote &datum ) { // CRTP override to process elements passing out of window scope 
-  };  
-  void PostUpdate( void ) {};  // CRTPover ride to do final calcs
+  void Expire( const Quote &datum ) { // CRTP override to process elements passing out of window scope
+  };
+  void PostUpdate() {};  // CRTPover ride to do final calcs
 private:
 };
 */

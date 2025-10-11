@@ -11,10 +11,8 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
-#include <stdexcept>
 #include <cassert>
+#include <stdexcept>
 
 #include <OUCommon/TimeSource.h>
 
@@ -23,74 +21,66 @@
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-Order::Order(void) {
-}
-
 Order::Order( // market order
-  Instrument::pInstrument_cref pInstrument,
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide, 
-  boost::uint32_t nOrderQuantity,
-  idPosition_t idPosition,
-  ptime dtOrderSubmitted
-  ) 
+  Instrument::pInstrument_cref pInstrument
+, OrderType::EOrderType eOrderType
+, OrderSide::EOrderSide eOrderSide
+, boost::uint32_t nOrderQuantity
+, idPosition_t idPosition
+, ptime dtOrderSubmitted
+  )
 :
-  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dtOrderSubmitted ),
-  m_pInstrument( pInstrument ),
-  m_bOutsideRTH( false ),
-  m_dblPriceXQuantity( 0 ), m_dblIncrementalCommission( 0.0 ),
-  m_nNextExecutionId ( 0 )
+  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dtOrderSubmitted )
+, m_pInstrument( pInstrument )
+, m_dblPriceXQuantity( 0 ), m_dblIncrementalCommission( 0.0 )
+, m_nNextExecutionId ( 0 )
 {
   ConstructOrder();
 }
 
 Order::Order( // limit or stop
-  Instrument::pInstrument_cref pInstrument,
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide, 
-  boost::uint32_t nOrderQuantity,
-  double dblPrice1,
-  idPosition_t idPosition,
-  ptime dtOrderSubmitted
-  ) 
+  Instrument::pInstrument_cref pInstrument
+, OrderType::EOrderType eOrderType
+, OrderSide::EOrderSide eOrderSide
+, boost::uint32_t nOrderQuantity
+, double dblPrice1
+, idPosition_t idPosition
+, ptime dtOrderSubmitted
+  )
 :
-  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dtOrderSubmitted ),
-  m_pInstrument( pInstrument ),
-  m_bOutsideRTH( false ),
-  m_dblPriceXQuantity( 0 ), m_dblIncrementalCommission( 0.0 ),
-  m_nNextExecutionId ( 0 )
+  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dtOrderSubmitted )
+, m_pInstrument( pInstrument )
+, m_dblPriceXQuantity( 0 ), m_dblIncrementalCommission( 0.0 )
+, m_nNextExecutionId ( 0 )
 {
   ConstructOrder();
 }
 
 Order::Order( // limit and stop
-  Instrument::pInstrument_cref pInstrument,
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide, 
-  boost::uint32_t nOrderQuantity,
-  double dblPrice1, double dblPrice2,
-  idPosition_t idPosition,
-  ptime dtOrderSubmitted
-  ) 
+  Instrument::pInstrument_cref pInstrument
+, OrderType::EOrderType eOrderType
+, OrderSide::EOrderSide eOrderSide
+, boost::uint32_t nOrderQuantity
+, double dblPrice1, double dblPrice2
+, idPosition_t idPosition
+, ptime dtOrderSubmitted
+  )
 :
-  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, dtOrderSubmitted ),
-  m_pInstrument( pInstrument ), 
-  m_bOutsideRTH( false ),
-  m_dblPriceXQuantity( 0 ),  m_dblIncrementalCommission( 0.0 ),
-  m_nNextExecutionId ( 0 )
+  m_row( idPosition, pInstrument->GetInstrumentName(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, dtOrderSubmitted )
+, m_pInstrument( pInstrument )
+, m_dblPriceXQuantity( 0 ),  m_dblIncrementalCommission( 0.0 )
+, m_nNextExecutionId ( 0 )
 {
   ConstructOrder();
 }
 
-Order::Order( const TableRowDef& row, pInstrument_t& pInstrument  ) 
-: m_row( row ), m_pInstrument( pInstrument ),
-  m_bOutsideRTH( false ),
-  m_dblPriceXQuantity( 0 ),  m_dblIncrementalCommission( 0.0 ),
-  m_nNextExecutionId ( 0 )
-{
-}
+Order::Order( const TableRowDef& row, pInstrument_t& pInstrument  )
+: m_row( row ), m_pInstrument( pInstrument )
+, m_dblPriceXQuantity( 0 ),  m_dblIncrementalCommission( 0.0 )
+, m_nNextExecutionId ( 0 )
+{}
 
-Order::~Order(void) {
+Order::~Order() {
 }
 
 void Order::ConstructOrder() {
@@ -116,8 +106,8 @@ void Order::SetSendingToProvider() {
   m_row.dtOrderSubmitted = ou::TimeSource::LocalCommonInstance().Internal();
 }
 
-OrderStatus::enumOrderStatus Order::ReportExecution(const Execution &exec) { 
-  // need to worry about fill after cancel, has multiple states:  cancelling, fill during cancel, cancelled
+OrderStatus::EOrderStatus Order::ReportExecution(const Execution &exec) {
+  // need to worry about fill after cancel, has multiple states:  canceling, fill during cancel, canceled
   assert( exec.GetOrderSide() == m_row.eOrderSide );
   bool bOverDone = false;
   if ( 0 == m_row.nQuantityRemaining ) {
@@ -183,24 +173,24 @@ OrderStatus::enumOrderStatus Order::ReportExecution(const Execution &exec) {
   return m_row.eOrderStatus;
 }
 
-void Order::ActOnError(OrderErrors::enumOrderErrors eError) {
+void Order::ActOnError(OrderError::EOrderError eError) {
   switch( eError ) {
-    case OrderErrors::Cancelled:
+    case OrderError::Cancelled:
       m_row.eOrderStatus = OrderStatus::Cancelled;
       break;
-    case OrderErrors::Rejected:
-    case OrderErrors::InstrumentNotFound:
+    case OrderError::Rejected:
+    case OrderError::InstrumentNotFound:
       m_row.eOrderStatus = OrderStatus::Rejected;
       break;
-    case OrderErrors::NotCancellable:
+    case OrderError::NotCancellable:
       break;
   }
 }
 
 void Order::SetCommission( double dblCommission ) {  // total accumulated commission to this point
   m_dblIncrementalCommission = dblCommission - m_row.dblCommission;
-  m_row.dblCommission = dblCommission; 
-  OnCommission( *this );  // run on order completion   
+  m_row.dblCommission = dblCommission;
+  OnCommission( *this );  // run on order completion
 }
 
 void Order::SetOrderId( idOrder_t id ) {
@@ -209,7 +199,7 @@ void Order::SetOrderId( idOrder_t id ) {
   m_row.idOrder = id;
 }
 
-void Order::MarkAsCancelled( void ) {
+void Order::MarkAsCancelled() {
   switch ( m_row.eOrderStatus ) {
   case OrderStatus::Created:
     m_row.eOrderStatus = OrderStatus::Cancelled;
@@ -229,6 +219,9 @@ void Order::MarkAsCancelled( void ) {
     break;
   case OrderStatus::Filled:
     m_row.eOrderStatus = OrderStatus::Filled;  // this one re-affirms, as cancel was too late
+    break;
+  default:
+    std::cout << "Order::MarkAsCancelled unhandled order status: " << m_row.eOrderStatus << std::endl;
     break;
   }
   OnOrderCancelled( *this );

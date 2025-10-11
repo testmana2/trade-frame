@@ -25,33 +25,36 @@ public:
 
   typedef ou::tf::ProviderInterfaceBase::pProvider_t pProvider_t;
 
-  Strike( void );  // for construction in std::Map
+  Strike();  // for construction in std::Map
   Strike( double dblStrike );
   Strike( const Strike& rhs );
-  ~Strike( void );
+  ~Strike();
 
   Strike& operator=( const Strike& rhs );
 
   bool operator< ( const Strike& rhs ) const { return m_dblStrike <  rhs.m_dblStrike; };
   bool operator<=( const Strike& rhs ) const { return m_dblStrike <= rhs.m_dblStrike; };
 
-  double GetStrike( void ) const { return m_dblStrike; };
+  double GetStrike() const { return m_dblStrike; };
 
   void AssignCall( Instrument::pInstrument_t pInstrument, pProvider_t pDataProvider, pProvider_t pGreekProvider );
   void AssignPut( Instrument::pInstrument_t pInstrument, pProvider_t pDataProvider, pProvider_t pGreekProvider );
 
-  ou::tf::option::Call* Call( void ) { return m_call.get(); };
-  ou::tf::option::Put*  Put( void )  { return m_put.get(); };
+  void AssignCall( Instrument::pInstrument_t pInstrument, pProvider_t pDataProvider );
+  void AssignPut( Instrument::pInstrument_t pInstrument, pProvider_t pDataProvider );
 
-  void SetWatchableOn( void );  // watchable defaults to off at time of construction
-  void SetWatchableOff( void );
+  ou::tf::option::Call* Call() { return m_call.get(); };
+  ou::tf::option::Put*  Put()  { return m_put.get(); };
 
-  void WatchStart( void );
-  void WatchStop( void );
-  bool IsWatching( void ) { return 0 != m_nWatching; };
+  void SetWatchableOn();  // watchable defaults to off at time of construction
+  void SetWatchableOff();
+
+  void WatchStart(); // not started if watchable is off
+  void WatchStop();
+  bool IsWatching( void ) const { return 0 != m_nWatching; };
 
   void SaveSeries( const std::string& sPrefix );
-  void EmitValues( void );
+  void EmitValues( double dblPriceUnderlying );
 
 protected:
 

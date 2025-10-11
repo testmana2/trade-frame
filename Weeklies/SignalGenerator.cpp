@@ -12,17 +12,25 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
+// Project:  Weeklies
 
-#include <boost/phoenix/core.hpp>
-#include <boost/phoenix/bind/bind_member_function.hpp>
-
-#include <TFBitsNPieces/ReadCboeWeeklyOptions.h>
+#include <TFBitsNPieces/ReadCboeWeeklyOptionsCsv.h>
+//#include <TFBitsNPieces/ReadCboeWeeklyOptionsXls.h>
 #include <TFBitsNPieces/InstrumentFilter.h>
+
+#include <TFStatistics/Pivot.h>
+#include <TFStatistics/HistoricalVolatility.h>
 
 #include "SignalGenerator.h"
 
-SignalGenerator::SignalGenerator(void) 
+namespace pt = boost::posix_time;
+namespace gregorian = boost::gregorian;
+
+namespace {
+const std::string sSpreadSheetName( "weeklies.xls" );
+}
+
+SignalGenerator::SignalGenerator(void)
   : m_fmt_mgr( m_xls)
 {
 }
@@ -32,55 +40,45 @@ SignalGenerator::~SignalGenerator(void) {
 
 void SignalGenerator::Run( void ) {
 
-  ou::tf::cboe::OptionExpiryDates_t expiries;
-  ou::tf::cboe::vUnderlyinginfo_t vui;
+  pt::ptime dtLast( gregorian::date( 2021, 5, 28 ), pt::time_duration( 23, 59, 59 ) );  // use date of last bar to retrieve
+
+  std::cout << "SignalGenerator parsing cboe spreadsheet ..." << std::endl;
+
+  std::vector<std::string> vSymbol;
 
   try {
-    ou::tf::cboe::ReadCboeWeeklyOptions( expiries, vui );
+    ou::tf::cboe::csv::ReadCboeWeeklyOptions(
+      [&vSymbol]( const ou::tf::cboe::csv::SymbolEntry& entry ){
+        vSymbol.push_back( entry.sSymbol );
+      });
   }
   catch(...) {
+    std::cout << "SignalGenerator failed." << std::endl;
   }
 
-  typedef ou::tf::cboe::vUnderlyinginfo_t::const_iterator vUnderlyinginfo_citer_t;
+  std::cout << "SignalGenerator pre-processing cboe spreadsheet ..." << std::endl;
 
-  for ( vUnderlyinginfo_citer_t iter = vui.begin(); vui.end() != iter; ++iter ) {
-//    std::cout << 
-//	    iter->sSymbol
-//	    << "," << iter->bAdded
-//	    << "," << iter->bStandardWeekly
-//	    << "," << iter->bExpandedWeekly
-//	    << "," << iter->bEOW
-//	    << "," << iter->sProductType
-//	    << "," << iter->sDescription
-//	    << std::endl;
-	    
-//    if ( ( "Equity" == iter->sProductType ) || ( "ETF" == iter->sProductType ) ) { 
+  for ( const std::string& sSymbol: vSymbol ) {
       //ScanBars( iter->sSymbol );
       BarSummary bs;
-      bs.sType = iter->sProductType;
-      m_mapSymbol.insert( mapSymbol_t::value_type( iter->sSymbol, bs ) );
-//    }
+      //bs.sType = iter->sProductType;
+      m_mapSymbol.insert( mapSymbol_t::value_type( sSymbol, bs ) );
   }
+
+  std::cout << "SignalGenerator running eod and building output spreadsheet (" << sSpreadSheetName << ") ..." << std::endl;
 
   if ( 0 != m_mapSymbol.size() ) {
-    ScanBars();
+    ScanBars( dtLast );
   }
-  
+
   std::cout << "SignalGenerator Complete" << std::endl;
-  
+
 }
 
-void SignalGenerator::ScanBars( void ) {
-  namespace args = boost::phoenix::placeholders;
-  ou::tf::InstrumentFilter<mapSymbol_t::iterator,ou::tf::Bars> filter( 
-    "/bar/86400",  // at least a year's worth of bars
-    ptime( date( 2015,  1,  1 ), time_duration( 0, 0, 0 ) ),
-    ptime( date( 2016,  6, 21 ), time_duration( 0, 0, 0 ) ), 
-    200,
-    boost::phoenix::bind( &SignalGenerator::HandleCallBackUseGroup, this, args::arg1, args::arg2, args::arg3 ),
-    boost::phoenix::bind( &SignalGenerator::HandleCallBackFilter, this, args::arg1, args::arg2, args::arg3 ),
-    boost::phoenix::bind( &SignalGenerator::HandleCallBackResults, this, args::arg1, args::arg2, args::arg3 )
-    );
+void SignalGenerator::ScanBars( pt::ptime dtLast ) {
+
+  pt::ptime dtBegin( dtLast.date() - gregorian::date_duration( 52 * 7 ), pt::time_duration( 0, 0, 0 ) ); // process ~year of bars
+
   try {
 
     m_xls.New( 1 );
@@ -101,29 +99,71 @@ void SignalGenerator::ScanBars( void ) {
     cell->SetString( "Price" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
+    cell->SetString( "DlyHistVol" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "EmaVolm" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
     cell->SetString( "BolRange" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
     cell->SetString( "SMA Sig" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
-    cell->SetString( "BolUpr" );
-    cell = m_sheet->Cell( 0, ix++ );
-    cell->SetFormat( fmt );
     cell->SetString( "BolLwr" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
-    cell->SetString( "SMA1" );
+    cell->SetString( "BolUpr" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
-    cell->SetString( "SMA2" );
+    cell->SetString( "SMA(8)" );
     cell = m_sheet->Cell( 0, ix++ );
     cell->SetFormat( fmt );
-    cell->SetString( "SMA3" );
+    cell->SetString( "SMA(21)" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "SMA(55)" );
 
-    filter.Run();
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "> PV" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "X Down" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "< R1 X Up" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "< R1 X Down" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "< PV" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "X Up" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "> S1 X Up" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "> S1 X Down" );
+    cell = m_sheet->Cell( 0, ix++ );
+    cell->SetFormat( fmt );
+    cell->SetString( "PV X" );
 
-    m_xls.SaveAs( "weeklies.xls" );
+    namespace ph = std::placeholders;
+    mapSymbol_t::iterator iter;
+    ou::tf::InstrumentFilter<mapSymbol_t::iterator,ou::tf::Bars> filter(
+      "/bar/86400",  // at least a year's worth of bars
+      dtBegin, dtLast, 200, iter,
+      std::bind( &SignalGenerator::HandleCallBackUseGroup, this, ph::_1, ph::_2, ph::_3 ),
+      std::bind( &SignalGenerator::HandleCallBackFilter,   this, ph::_1, ph::_2, ph::_3 ),
+      std::bind( &SignalGenerator::HandleCallBackResults,  this, ph::_1, ph::_2, ph::_3, ph::_4 )
+      );
+
+    m_xls.SaveAs( sSpreadSheetName.c_str() );
     m_xls.Close();  }
 
   catch( ... ) {
@@ -135,25 +175,31 @@ bool SignalGenerator::HandleCallBackUseGroup( mapSymbol_t::iterator& iter, const
   return true;
 }
 
-bool SignalGenerator::HandleCallBackFilter( mapSymbol_t::iterator& iter, const std::string& sObject, ou::tf::Bars& bars ) {
+bool SignalGenerator::HandleCallBackFilter( mapSymbol_t::iterator& iter, const std::string& sObject, const ou::tf::Bars& bars ) {
   iter = m_mapSymbol.find( sObject );
   return m_mapSymbol.end() != iter;
 }
 
-void SignalGenerator::HandleCallBackResults( mapSymbol_t::iterator& iter, const std::string& sObject, ou::tf::Bars& bars ) {
+void SignalGenerator::HandleCallBackResults( mapSymbol_t::iterator& iter, const std::string& sPath, const std::string& sObject, const ou::tf::Bars& bars ) {
   // process bars here
+  bool bFoundFirst( false );
   for ( ou::tf::Bars::const_iterator iterBars = bars.begin(); bars.end() != iterBars; ++iterBars ) {
     ou::tf::Price price( iterBars->DateTime(), iterBars->Close() );
-    iter->second.prices.Append( price );
-//    iter->second.pricesBollinger20.Update();
-//    iter->second.pricesSMA1.Update();
-//    iter->second.pricesSMA2.Update();
-//    iter->second.pricesSMA3.Update();
+    iter->second.prices.Append( price ); // automatically updates indicators
+    if ( bFoundFirst ) {
+      iter->second.emaVolume = ( ( iter->second.emaVolume * 19.0 + iterBars->Volume() ) / 20.0 );  // 20 day exponential moving average
+    }
+    else { // preseed a starting value
+      iter->second.emaVolume = iterBars->Volume();
+      bFoundFirst = true;
+    }
   }
-  //iter->second.pricesBollinger20.Update();
 
-  ExcelFormat::CellFormat fmtNum(m_fmt_mgr);
+  ExcelFormat::CellFormat fmtNum( m_fmt_mgr );
   fmtNum.set_format_string( XLS_FORMAT_DECIMAL );
+
+  ExcelFormat::CellFormat fmtInt( m_fmt_mgr );
+  fmtInt.set_format_string( XLS_FORMAT_INTEGER );
 
   ExcelFormat::CellFormat fmtCenterTxt(m_fmt_mgr);
   fmtCenterTxt.set_alignment( ExcelFormat::EXCEL_HALIGN_CENTRED );
@@ -162,16 +208,26 @@ void SignalGenerator::HandleCallBackResults( mapSymbol_t::iterator& iter, const 
   ExcelFormat::BasicExcelCell* cell;
   int ix( 0 );
 
-  cell = m_sheet->Cell( iy, ix++ );
-  cell->SetString( iter->second.sType.c_str() );
+  cell = m_sheet->Cell( iy, ix++ ); // Type
+  //cell->SetString( iter->second.sType.c_str() );  // no longer available
+  cell->SetString( "" );
 
-  cell = m_sheet->Cell( iy, ix++ );
+  cell = m_sheet->Cell( iy, ix++ ); // Symbol
   cell->SetString( sObject.c_str() );
 
-  double last = bars.Last()->Close();
+  double last = bars.last().Close(); // Price
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetDouble( last );
   cell->SetFormat( fmtNum );
+
+  double hv = std::for_each( bars.at( bars.Size() - 20 ), bars.end(), ou::HistoricalVolatility() );
+  cell = m_sheet->Cell( iy, ix++ ); // Daily Hist Vol
+  cell->SetDouble( 100.0 * hv );
+  cell->SetFormat( fmtNum );
+
+  cell = m_sheet->Cell( iy, ix++ ); // Ema Volume
+  cell->SetInteger( iter->second.emaVolume );
+  cell->SetFormat( fmtInt );
 
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetFormat( fmtCenterTxt );
@@ -206,21 +262,21 @@ void SignalGenerator::HandleCallBackResults( mapSymbol_t::iterator& iter, const 
     std::cout << "<";
     cell->SetString( "<" );
   }
-  
-  std::cout << sObject 
+
+  std::cout << sObject
     << ": boll(" << lower << "," << upper
     << "),sma1(" << sma1
     << "),sma2(" << sma2
     << "),sma3(" << sma3
     << ")"
-    << std::endl;
+    ;
 
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetFormat( fmtNum );
-  cell->SetDouble( upper );
+  cell->SetDouble( lower );
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetFormat( fmtNum );
-  cell->SetDouble( lower );
+  cell->SetDouble( upper );
 
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetFormat( fmtNum );
@@ -231,9 +287,52 @@ void SignalGenerator::HandleCallBackResults( mapSymbol_t::iterator& iter, const 
   cell = m_sheet->Cell( iy, ix++ );
   cell->SetFormat( fmtNum );
   cell->SetDouble( sma3 );
-  
+
+  ou::tf::statistics::Pivot pivot( bars );
+
+  std::cout
+    << ",pivot("
+    <<        pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::AbovePV )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::AbovePV_X_Down )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVR1_X_Up )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVR1_X_Down )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BelowPV )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BelowPV_X_Up )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVS1_X_Up )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVS1_X_Down )
+    << "," << pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::CrossPV )
+    << ")"
+    ;
+
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::AbovePV ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::AbovePV_X_Down ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVR1_X_Up ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVR1_X_Down ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BelowPV ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BelowPV_X_Up ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVS1_X_Up ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::BtwnPVS1_X_Down ) );
+  cell = m_sheet->Cell( iy, ix++ );
+  cell->SetFormat( fmtNum );
+  cell->SetDouble( pivot.ItemOfInterest( ou::tf::statistics::Pivot::EItemsOfInterest::CrossPV ) );
+
+  std::cout
+    << std::endl;
+
 }
-
-
-
-

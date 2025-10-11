@@ -13,9 +13,11 @@
  ************************************************************************/
 // Started 2014/09/15
 
-// http://herbsutter.com/gotw/_100/   pimpl stuff
+// http://herbsutter.com/gotw/_100/pimpl stuff
 
 #pragma once
+
+#include <vector>
 
 #define FUSION_MAX_VECTOR_SIZE 15
 
@@ -51,20 +53,26 @@ struct PanelPortfolioPosition_impl {
 //public:
 
   PanelPortfolioPosition_impl( PanelPortfolioPosition& );
-  ~PanelPortfolioPosition_impl( void );
+  virtual ~PanelPortfolioPosition_impl();
 
 //protected:
 //private:
 
+  typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
+
   typedef ou::tf::Portfolio::pPortfolio_t pPortfolio_t;
   typedef ou::tf::Portfolio::pPosition_t pPosition_t;
 
-  void UpdateGui( void );
+  void UpdateGui();
   void AddPosition( pPosition_t pPosition );
+  void AddInstrumentToPosition( pInstrument_t pInstrument );
+
+  void SaveColumnSizes( ou::tf::GridColumnSizer& ) const;
+  void SetColumnSizes( ou::tf::GridColumnSizer& );
 
 // for column 2, use wxALIGN_LEFT, wxALIGN_CENTRE or wxALIGN_RIGHT
 #define GRID_ARRAY_PARAM_COUNT 5
-#define GRID_ARRAY_COL_COUNT 15
+#define GRID_ARRAY_COL_COUNT 12
 #define GRID_ARRAY \
   (GRID_ARRAY_COL_COUNT,  \
     ( /* Col 0,            1,            2,         3,      4,             */ \
@@ -80,9 +88,6 @@ struct PanelPortfolioPosition_impl {
       (COL_Bid      , "Bid",        wxALIGN_RIGHT,  50, ModelCellDouble ), \
       (COL_Last     , "Last",       wxALIGN_RIGHT,  50, ModelCellDouble ), \
       (COL_Ask      , "Ask",        wxALIGN_RIGHT,  50, ModelCellDouble ), \
-      (COL_ImpVol   , "ImpVol",     wxALIGN_RIGHT,  50, ModelCellDouble ), \
-      (COL_Delta    , "Delta",      wxALIGN_RIGHT,  50, ModelCellDouble ), \
-      (COL_Gamma    , "Gamma",      wxALIGN_RIGHT,  50, ModelCellDouble ), \
       ) \
     ) \
   /**/
@@ -97,12 +102,12 @@ struct PanelPortfolioPosition_impl {
 
   class structPosition {
   public:
-    structPosition( pPosition_t pPosition, wxGrid* pGrid, int row )
-      : m_pPosition( pPosition ), m_pGrid( pGrid ), m_row( row ) {
+    structPosition( pPosition_t pPosition, wxGrid& grid, int row )
+      : m_pPosition( pPosition ), m_grid( grid ), m_row( row ) {
         Init();
     }
     structPosition( const structPosition& rhs )
-      : m_pPosition( rhs.m_pPosition ), m_pGrid( rhs.m_pGrid ), m_row( rhs.m_row ) {
+      : m_pPosition( rhs.m_pPosition ), m_grid( rhs.m_grid ), m_row( rhs.m_row ) {
       Init();
     }
     ~structPosition( void ) {
@@ -116,7 +121,7 @@ struct PanelPortfolioPosition_impl {
     void UpdateGui( void ) {
       //m_pGrid->BeginBatch();
       //m_pGrid->Freeze();
-      boost::fusion::for_each( m_vModelCells, ModelCell_ops::UpdateGui( m_pGrid, m_row ) );
+      boost::fusion::for_each( m_vModelCells, ModelCell_ops::UpdateGui( m_grid, m_row ) );
       //m_pGrid->Thaw();
       //m_pGrid->EndBatch();
     }
@@ -126,7 +131,7 @@ struct PanelPortfolioPosition_impl {
     }
   private:
     int m_row;
-    wxGrid* m_pGrid;
+    wxGrid& m_grid;
     pPosition_t m_pPosition;
     vModelCells_t m_vModelCells;
     void Init( void ) {
@@ -168,7 +173,6 @@ struct PanelPortfolioPosition_impl {
       boost::fusion::at_c<COL_Comm>( m_vModelCells ).SetValue( m_pPosition->GetRow().dblCommissionPaid );
     }
 
-
     void HandleOnUnRealizedPL( const Position::PositionDelta_delegate_t& tuple ) {
       boost::fusion::at_c<COL_URPL>( m_vModelCells ).SetValue( boost::tuples::get<2>( tuple ) );
     }
@@ -205,18 +209,16 @@ struct PanelPortfolioPosition_impl {
     wxMenu* m_menuGridLabelPositionPopUp;
     wxMenu* m_menuGridCellPositionPopUp;
 
-  PanelPortfolioPosition& m_ppp; // passed in on construction 
+  PanelPortfolioPosition& m_ppp; // passed in on construction
 
   pPortfolio_t m_pPortfolio;
-  PanelPortfolioPosition::DelegateConstructPosition_t m_delegateConstructPosition;  // used to construct the Position
-  PanelPortfolioPosition::DelegateConstructPortfolio_t m_delegateConstructPortfolio;  // used to construct the Portfolio
 
   //typedef boost::fusion::vector4<ModelCellDouble,ModelCellDouble,ModelCellDouble,ModelCellDouble> vPortfolioValues_t;
   typedef std::vector<ModelCellDouble> vPortfolioValues_t;
   vPortfolioValues_t m_vPortfolioValues;
 
-  ou::tf::DialogInstrumentSelect::DataExchange m_DialogInstrumentSelect_DataExchange;
-  ou::tf::DialogInstrumentSelect* m_pdialogInstrumentSelect;
+  //ou::tf::DialogInstrumentSelect::DataExchange m_DialogInstrumentSelect_DataExchange;
+  //ou::tf::DialogInstrumentSelect* m_pdialogInstrumentSelect;
 
   ou::tf::DialogSimpleOneLineOrder::DataExchange m_DialogSimpleOneLineOrder_DataExchange;
   ou::tf::DialogSimpleOneLineOrder* m_pdialogSimpleOneLineOrder;
@@ -227,10 +229,9 @@ struct PanelPortfolioPosition_impl {
   void CreateControls();
   void SetPortfolio( pPortfolio_t pPortfolio );
 
-  void OnClose( wxCloseEvent& event );
-
   void OnRightClickGridLabel( wxGridEvent& event );
   void OnRightClickGridCell( wxGridEvent& event );
+  void OnGridColSize( wxGridSizeEvent& event );
   void OnPositionPopUpAddPosition( wxCommandEvent& event );
   void OnPositionPopUpAddOrder( wxCommandEvent& event );
   void OnPositionPopUpCancelOrders( wxCommandEvent& event );
@@ -238,7 +239,6 @@ struct PanelPortfolioPosition_impl {
   void OnPositionPopUpAddPortfolio( wxCommandEvent& event );
   void OnPositionPopUpClosePortfolio( wxCommandEvent& event );
 
-  void OnDialogInstrumentSelectDone( ou::tf::DialogBase::DataExchange* );
   void OnDialogSimpleOneLineOrderDone( ou::tf::DialogBase::DataExchange* );
   void OnDialogNewPortfolioDone( ou::tf::DialogBase::DataExchange* );
 
@@ -246,9 +246,9 @@ struct PanelPortfolioPosition_impl {
   void HandleOnExecutionUpdate( const Portfolio& );
   void HandleOnCommissionUpdate( const Portfolio& );
 
+  void HandleWindowDestroy( wxWindowDestroyEvent& event );
+
 };
-
-
 
 } // namespace tf
 } // namespace ou

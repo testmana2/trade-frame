@@ -71,6 +71,10 @@ struct TreeItemResources {  // used by inheritors of TreeItemBase
   typedef signalEnsureVisible_t::slot_type slotEnsureVisible_t;
   signalEnsureVisible_t signalEnsureVisible;
   
+  typedef boost::signals2::signal<void (const wxTreeItemId&)> signalActivateItem_t;
+  typedef signalActivateItem_t::slot_type slotActivateItem_t;
+  signalActivateItem_t signalActivateItem;
+  
 };
 
 // ===========
@@ -84,7 +88,7 @@ public:
   TreeItemBase( wxTreeItemId id, TreeItemResources& resources ): 
     m_id( id ), m_baseResources( resources ), m_pMenu( 0 )
     {}
-  //TreeItemBase( wxTreeItemId id ): m_id( id ) {}
+  
   virtual ~TreeItemBase( void ) {
     if ( 0 != m_pMenu ) {
       delete m_pMenu;
@@ -92,10 +96,11 @@ public:
     }
   }
   
+  virtual void HandleOnClick( void ) {}
   virtual void ShowContextMenu( void ) {}
 //  virtual void SetSelected( CommonGuiElements& ) {}
 //  virtual void RemoveSelected( CommonGuiElements& ) {}
-  virtual void DeletingChild( wxTreeItemId id ) {};
+  virtual void DeletingChild( wxTreeItemId id ) { DeleteMember( id ); }
   wxTreeItemId GetTreeItemId( void ) { return m_id; }
   
   void HandleRename( wxCommandEvent& event );
@@ -107,22 +112,23 @@ protected:
   
   wxTreeItemId m_id;  // identifier of this part of the tree control
   
-  TreeItemResources& m_baseResources;
-  
-  typedef std::map<void*,pTreeItemBase_t> mapMembers_t;  // void* from wxTreeItemId, tracks owned items for access
-  mapMembers_t m_mapMembers; 
-  
   struct member_t {
     unsigned int m_type;
-    void* m_void;
+    //void* m_void;
     pTreeItemBase_t m_pTreeItemBase;
-    member_t( unsigned int type, void* void_, pTreeItemBase_t p ): m_type( type ), m_void( void_ ), m_pTreeItemBase( p ) {};
+    //member_t( unsigned int type, void* void_, pTreeItemBase_t p ): m_type( type ), m_void( void_ ), m_pTreeItemBase( p ) {};
+    member_t( unsigned int type, pTreeItemBase_t p ): m_type( type ), m_pTreeItemBase( p ) {};
   };
   
-  wxMenu* m_pMenu;  // context menu
+  typedef std::map<void*,member_t> mapMembers_t;  // void* from wxTreeItemId, tracks owned items for access
+  mapMembers_t m_mapMembers; 
+  
+  //typedef std::vector<member_t> vMembers_t; // tracks ordered list for serialization
+  //vMembers_t m_vMembers;
 
-  typedef std::vector<member_t> vMembers_t; // tracks ordered list for serialization
-  vMembers_t m_vMembers;
+  TreeItemResources& m_baseResources;
+  
+  wxMenu* m_pMenu;  // context menu
 
   wxTreeItemId AppendSubItem( const std::string& sLabel ); // add the visual menu item
   pTreeItemBase_t  AppendSubItem( wxTreeItemId id, TreeItemBase* p );  // add the associated real object

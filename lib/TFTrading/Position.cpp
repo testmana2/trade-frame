@@ -11,139 +11,177 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
+#include <algorithm>
+
+#include <TFOptions/Option.h>
 
 #include "OrderManager.h"
-
 #include "Position.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-Position::Position( pInstrument_cref pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider,
-  const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount, 
-  const idPortfolio_t& idPortfolio, const std::string& sName, const std::string& sAlgorithm ) 
-: m_pExecutionProvider( pExecutionProvider ), m_pDataProvider( pDataProvider ), 
-  m_pInstrument( pInstrument ), 
-  m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( true ), m_bExecutionAccountAssigned( true ), m_bDataAccountAssigned( true ),
+Position::Position( pInstrument_t& pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider,
+  const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount,
+  const idPortfolio_t& idPortfolio, const std::string& sName, const std::string& sAlgorithm )
+: m_pExecutionProvider( pExecutionProvider ), //m_pDataProvider( pDataProvider ),
+  m_dblMultiplier( 1 ), //m_bConnectedToDataProvider( false ),
   m_row( idPortfolio, sName, pInstrument->GetInstrumentName(), idExecutionAccount, idDataAccount, sAlgorithm )
 {
+  ConstructWatch( pInstrument, pDataProvider );
   Construction();
 }
 
-Position::Position( pInstrument_cref pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider ) 
-: m_pExecutionProvider( pExecutionProvider ), m_pDataProvider( pDataProvider ), 
-  m_pInstrument( pInstrument ), 
-  m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( true ), m_bExecutionAccountAssigned( true ), m_bDataAccountAssigned( true )
+Position::Position( pWatch_t pWatch, pProvider_t pExecutionProvider )
+: m_dblMultiplier( 1 ),
+  m_pWatch( pWatch ),
+  m_pExecutionProvider( pExecutionProvider )
 {
+  assert( 0 != m_pWatch.use_count() );
+  assert( nullptr != m_pWatch.get() );  // this is probably a better check than use_count
+  assert( 0 != m_pWatch->GetInstrument().use_count() );
+  assert( 0 != m_pWatch->GetProvider().use_count() );
   Construction();
 }
 
-Position::Position( pInstrument_cref pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider, const std::string& sNotes ) 
-: m_pExecutionProvider( pExecutionProvider ), m_pDataProvider( pDataProvider ), 
-  m_pInstrument( pInstrument ), 
-  m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( true ), m_bExecutionAccountAssigned( true ), m_bDataAccountAssigned( true )
+Position::Position( pWatch_t pWatch, pProvider_t pExecutionProvider,
+  const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount,
+  const idPortfolio_t& idPortfolio, const std::string& sNamePosition, const std::string& sAlgorithm )
+: m_pExecutionProvider( pExecutionProvider ), //m_pDataProvider( pDataProvider ),
+  m_dblMultiplier( 1 ), //m_bConnectedToDataProvider( false ),
+  m_pWatch( pWatch ),
+  m_row( idPortfolio, sNamePosition, pWatch->GetInstrument()->GetInstrumentName(), idExecutionAccount, idDataAccount, sAlgorithm )
+{
+  assert( 0 != m_pWatch.use_count() );
+  assert( nullptr != m_pWatch.get() );  // this is probably a better check than use_count
+  assert( 0 != m_pWatch->GetInstrument().use_count() );
+  assert( 0 != m_pWatch->GetProvider().use_count() );
+  Construction();
+}
+
+Position::Position(
+  pWatch_t pWatch, pProvider_t pExecutionProvider,
+  const idPortfolio_t& idPortfolio, const std::string& sNamePosition, const std::string& sAlgorithm )
+: m_pExecutionProvider( pExecutionProvider ), //m_pDataProvider( pDataProvider ),
+  m_dblMultiplier( 1 ), //m_bConnectedToDataProvider( false ),
+  m_pWatch( pWatch ),
+  m_row( idPortfolio, sNamePosition, pWatch->GetInstrument()->GetInstrumentName(), pExecutionProvider->GetName(), pWatch->GetProvider()->GetName(), sAlgorithm )
+{
+  assert( 0 != m_pWatch.use_count() );
+  assert( nullptr != m_pWatch.get() );  // this is probably a better check than use_count
+  assert( 0 != m_pWatch->GetInstrument().use_count() );
+  assert( 0 != m_pWatch->GetProvider().use_count() );
+  Construction();
+}
+
+Position::Position( pInstrument_t& pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider )
+: m_pExecutionProvider( pExecutionProvider ), //m_pDataProvider( pDataProvider ),
+  m_dblMultiplier( 1 )
+{
+  ConstructWatch( pInstrument, pDataProvider );
+  Construction();
+}
+
+Position::Position(
+  pInstrument_t& pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider, const std::string& sNotes )
+: m_pExecutionProvider( pExecutionProvider ), //m_pDataProvider( pDataProvider ),
+  m_dblMultiplier( 1 )
 {
   m_row.sNotes = sNotes;
+  ConstructWatch( pInstrument, pDataProvider );
   Construction();
 }
 
-Position::Position( pInstrument_cref pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider, 
-  const TableRowDef& row ) 
+Position::Position(
+  pInstrument_t& pInstrument, pProvider_t pExecutionProvider, pProvider_t pDataProvider, const TableRowDef& row )
 : m_row( row ),
-  m_pExecutionProvider( pExecutionProvider ), m_pDataProvider( pDataProvider ), 
-  m_pInstrument( pInstrument ), 
-  m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( true ), m_bExecutionAccountAssigned( true ), m_bDataAccountAssigned( true )
+  m_pExecutionProvider( pExecutionProvider ),
+  m_dblMultiplier( 1 )
 {
+  ConstructWatch( pInstrument, pDataProvider );
   Construction();
 }
 
-Position::Position( const TableRowDef& row ) 
+Position::Position( const TableRowDef& row )
 : m_row( row ),
-  m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( false ), m_bExecutionAccountAssigned( false ), m_bDataAccountAssigned( false )
+  m_dblMultiplier( 1 )
 {
-  // need flags to wait for execution, data, instrument variables to be set
 }
 
-Position::Position( void ) 
-: m_dblMultiplier( 1 ), m_bConnectedToDataProvider( false ),
-  m_bInstrumentAssigned ( false ), m_bExecutionAccountAssigned( false ), m_bDataAccountAssigned( false )
+Position::Position()
+: m_dblMultiplier( 1 )
 {
-  // need flags to wait for execution, data, instrument variables to be set
 }
 
-void Position::Construction( void ) {
-  m_dblMultiplier = m_pInstrument->GetMultiplier();
-  if ( m_pDataProvider->ProvidesQuotes() ) {
-    m_pDataProvider->AddQuoteHandler( m_pInstrument, MakeDelegate( this, &Position::HandleQuote ) );
+void Position::ConstructWatch( pInstrument_t& pInstrument, pProvider_t pDataProvider ) {
+  assert( nullptr == m_pWatch.get() );
+  assert( nullptr != pInstrument.get() );
+  assert( nullptr != pDataProvider.get() );
+  switch ( pInstrument->GetInstrumentType() ) {
+    case ou::tf::InstrumentType::Option:
+    case ou::tf::InstrumentType::FuturesOption:
+      m_pWatch = std::make_shared<ou::tf::option::Option>( pInstrument, pDataProvider );
+      break;
+    default:
+      m_pWatch = std::make_shared<ou::tf::Watch>( pInstrument, pDataProvider );
+      break;
   }
-  if ( m_pDataProvider->ProvidesTrades() ) {
-    m_pDataProvider->AddTradeHandler( m_pInstrument, MakeDelegate( this, &Position::HandleTrade ) );
-  }
-  if ( m_pDataProvider->ProvidesGreeks() ) {
-    m_pDataProvider->AddGreekHandler( m_pInstrument, MakeDelegate( this, &Position::HandleGreek ) );
-  }
-  m_pDataProvider->OnDisconnecting.Add( MakeDelegate( this, &Position::DisconnectFromDataProvider ) );
-  m_bConnectedToDataProvider = true;
 }
 
-void Position::Set( pInstrument_cref pInstrument, pProvider_t& pExecutionProvider, pProvider_t& pDataProvider ) {
+void Position::Construction() {
+  assert( nullptr != m_pWatch.get() );
+  assert( nullptr != m_pWatch->GetProvider().get() );  // new validation, and could trip up some code
+  m_dblMultiplier = m_pWatch->GetInstrument()->GetMultiplier();
+  //std::cout << m_pWatch->GetInstrumentName() << " multiplier=" << m_dblMultiplier << std::endl;
+//  HandleQuote( m_pWatch->LastQuote() ); // ensure we have at least one quote (some options don't quote on very otm) -- watch not yet activated
+  m_pWatch->OnQuote.Add( MakeDelegate( this, &Position::HandleQuote ) );
+  m_pWatch->OnTrade.Add( MakeDelegate( this, &Position::HandleTrade ) );
+  m_pWatch->StartWatch();
+}
 
-  m_pInstrument = pInstrument;
-  m_bInstrumentAssigned = true;
+void Position::Set( pInstrument_t& pInstrument, pProvider_t& pExecutionProvider, pProvider_t& pDataProvider ) {
 
   m_pExecutionProvider = pExecutionProvider;
-  m_bExecutionAccountAssigned = true;
 
-  m_pDataProvider = pDataProvider;
-  m_bDataAccountAssigned = true;
-
+  ConstructWatch( pInstrument, pDataProvider );
   Construction();
 
 }
 
-Position::~Position(void) {
-  if ( m_bConnectedToDataProvider ) {
-    DisconnectFromDataProvider( 0 );
+Position::~Position() {
+
+  if ( nullptr != m_pWatch.get() ) {
+    m_pWatch->StopWatch();
+    m_pWatch->OnQuote.Remove( MakeDelegate( this, &Position::HandleQuote ) );
+    m_pWatch->OnTrade.Remove( MakeDelegate( this, &Position::HandleTrade ) );
   }
+
   for ( std::vector<pOrder_t>::iterator iter = m_vAllOrders.begin(); iter != m_vAllOrders.end(); ++iter ) {
+    iter->get()->OnOrderCancelled.Remove( MakeDelegate( this, &Position::HandleCancellation ) );
     iter->get()->OnCommission.Remove( MakeDelegate( this, &Position::HandleCommission ) );
     iter->get()->OnExecution.Remove( MakeDelegate( this, &Position::HandleExecution ) );
   }
+
   m_vOpenOrders.clear();
   m_vClosedOrders.clear();
   m_vAllOrders.clear();
+
 }
 
-void Position::DisconnectFromDataProvider( int ) {
-  m_pDataProvider->OnDisconnecting.Remove( MakeDelegate( this, &Position::DisconnectFromDataProvider ) );
-  if ( m_pDataProvider->ProvidesQuotes() ) {
-    m_pDataProvider->RemoveQuoteHandler( m_pInstrument, MakeDelegate( this, &Position::HandleQuote ) );
+void Position::HandleQuote( quote_t& quote ) {
+
+  // TODO: use a flag to determine if to use zero based or not?
+  //       maybe allow on optiosn, but not futures/equity?
+  if ( ( 0 == quote.Bid() ) && ( 0 == quote.Ask() ) ) {
+    return; // some very otm options will have a 0 bid
   }
-  if ( m_pDataProvider->ProvidesTrades() ) {
-    m_pDataProvider->RemoveTradeHandler( m_pInstrument, MakeDelegate( this, &Position::HandleTrade ) );
-  }
-  if ( m_pDataProvider->ProvidesGreeks() ) {
-    m_pDataProvider->RemoveGreekHandler( m_pInstrument, MakeDelegate( this, &Position::HandleGreek ) );
-  }
-  m_bConnectedToDataProvider = false;
-}
 
-void Position::HandleQuote( quote_t quote ) {
+  OnQuote( quote );  // note OnQuotePostProcess deals with post-update notification
 
-  if ( ( 0 == quote.Ask() ) || ( 0 == quote.Bid() ) ) return;
+  bool bProcessed( false );
+  double dblMarketValue {};
+  double dblPreviousUnRealizedPL( m_row.dblUnRealizedPL );
 
-  OnQuote( quote );
-
-  double dblPreviousUnRealizedPL = m_row.dblUnRealizedPL;
-
-  bool bProcessed(false);
-  double dblMarketValue;
   switch ( m_row.eOrderSideActive ) {
     case OrderSide::Buy:
       dblMarketValue = m_row.nPositionActive * quote.Bid() * m_dblMultiplier;
@@ -166,16 +204,13 @@ void Position::HandleQuote( quote_t quote ) {
 
 }
 
-void Position::HandleTrade( trade_t trade ) {
+void Position::HandleTrade( trade_t& trade ) {
   OnTrade( trade );
 }
 
-void Position::HandleGreek( greek_t greek ) {
-}
-
 Order::pOrder_t Position::PlaceOrder( // market
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity
 ) {
   pOrder_t pOrder = ConstructOrder( eOrderType, eOrderSide, nOrderQuantity );
@@ -184,8 +219,8 @@ Order::pOrder_t Position::PlaceOrder( // market
 }
 
 Order::pOrder_t Position::PlaceOrder( // limit or stop
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity,
   double dblPrice1
 ) {
@@ -195,10 +230,10 @@ Order::pOrder_t Position::PlaceOrder( // limit or stop
 }
 
 Order::pOrder_t Position::PlaceOrder( // limit and stop
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity,
-  double dblPrice1,  
+  double dblPrice1,
   double dblPrice2
 ) {
   pOrder_t pOrder = ConstructOrder( eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2 );
@@ -207,47 +242,51 @@ Order::pOrder_t Position::PlaceOrder( // limit and stop
 }
 
 Order::pOrder_t Position::ConstructOrder( // market
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity
 ) {
   assert( OrderSide::Unknown != eOrderSide );
   assert( OrderType::Market == eOrderType );
-  //pOrder_t pOrder( new Order( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, m_row.idPosition ) );
+  assert( nullptr != m_pWatch.get() );
   pOrder_t pOrder
-   = OrderManager::LocalCommonInstance().ConstructOrder( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, m_row.idPosition );
-  //PlaceOrder( pOrder );
+   = OrderManager::LocalCommonInstance().ConstructOrder( m_pWatch->GetInstrument(), eOrderType, eOrderSide, nOrderQuantity, m_row.idPosition );
+  Register( pOrder );
   return pOrder;
 }
 
 Order::pOrder_t Position::ConstructOrder( // limit or stop
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity,
   double dblPrice1
 ) {
   assert( OrderSide::Unknown != eOrderSide );
   assert( ( OrderType::Limit == eOrderType) || ( OrderType::Stop == eOrderType ) || ( OrderType::Trail == eOrderType ) );
-  //pOrder_t pOrder( new Order( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, m_row.idPosition ) );
+  assert( nullptr != m_pWatch.get() );
   pOrder_t pOrder
-   = OrderManager::LocalCommonInstance().ConstructOrder( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, m_row.idPosition );
-  //PlaceOrder( pOrder );
+   = OrderManager::LocalCommonInstance().ConstructOrder( m_pWatch->GetInstrument(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, m_row.idPosition );
+  Register( pOrder );
   return pOrder;
 }
 
 Order::pOrder_t Position::ConstructOrder( // limit and stop
-  OrderType::enumOrderType eOrderType,
-  OrderSide::enumOrderSide eOrderSide,
+  OrderType::EOrderType eOrderType,
+  OrderSide::EOrderSide eOrderSide,
   boost::uint32_t nOrderQuantity,
-  double dblPrice1,  
+  double dblPrice1,
   double dblPrice2
 ) {
   assert( OrderSide::Unknown != eOrderSide );
-  assert( ( OrderType::StopLimit == eOrderType) || ( OrderType::TrailLimit == eOrderType ) );
-  //pOrder_t pOrder( new Order( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, m_row.idPosition ) );
+  assert(
+       ( OrderType::StopLimit == eOrderType )
+    || ( OrderType::Trail == eOrderType )
+    || ( OrderType::TrailLimit == eOrderType )
+    );
+  assert( nullptr != m_pWatch.get() );
   pOrder_t pOrder
-   = OrderManager::LocalCommonInstance().ConstructOrder( m_pInstrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, m_row.idPosition );
-  //PlaceOrder( pOrder );
+   = OrderManager::LocalCommonInstance().ConstructOrder( m_pWatch->GetInstrument(), eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, m_row.idPosition );
+  Register( pOrder );
   return pOrder;
 }
 
@@ -261,31 +300,60 @@ void Position::PlaceOrder( pOrder_t pOrder ) {
 
   if ( 0 == m_row.nPositionPending ) m_row.eOrderSidePending = pOrder->GetOrderSide();  // first to set non-zero gives us our predominant side
 
-  m_row.nPositionPending += pOrder->GetQuantity();
-  m_vAllOrders.push_back( pOrder );
-  m_vOpenOrders.push_back( pOrder );
-  pOrder->OnExecution.Add( MakeDelegate( this, &Position::HandleExecution ) ); 
-  pOrder->OnCommission.Add( MakeDelegate( this, &Position::HandleCommission ) );
-  pOrder->OnOrderCancelled.Add( MakeDelegate( this, &Position::HandleCancellation ) );
+  // this is going to be problematic if we post a Combo or Bracket order set
+  m_row.nPositionPending += pOrder->GetQuanOrdered();
+  const auto id = pOrder->GetOrderId();
+  if ( 0 == std::count_if(
+    m_vAllOrders.begin(), m_vAllOrders.end(),  // this may not be efficient for large order lists, maybe use a map sometime
+    [id]( pOrder_t& pOrder ){ return ( id == pOrder->GetOrderId() ); } ) ) {
+      Register( pOrder );
+    }
   OrderManager::LocalCommonInstance().PlaceOrder( &(*m_pExecutionProvider), pOrder );
 
   OnPositionChanged( *this );
 }
 
-void Position::CancelOrders( void ) {
+void Position::Register( pOrder_t pOrder ) {
+  m_vAllOrders.push_back( pOrder );
+  m_vOpenOrders.push_back( pOrder );
+  pOrder->OnExecution.Add( MakeDelegate( this, &Position::HandleExecution ) );
+  pOrder->OnCommission.Add( MakeDelegate( this, &Position::HandleCommission ) );
+  pOrder->OnOrderCancelled.Add( MakeDelegate( this, &Position::HandleCancellation ) );
+}
+
+void Position::UpdateOrder( pOrder_t pOrder ) {
+
+  //if ( 0 == m_row.nPositionPending ) m_row.eOrderSidePending = pOrder->GetOrderSide();  // first to set non-zero gives us our predominant side
+
+  //m_row.nPositionPending += pOrder->GetQuantity();
+  //m_vAllOrders.push_back( pOrder );
+  //m_vOpenOrders.push_back( pOrder ); // TODO: check to see if still an Open Order?
+  //pOrder->OnExecution.Add( MakeDelegate( this, &Position::HandleExecution ) );
+  //pOrder->OnCommission.Add( MakeDelegate( this, &Position::HandleCommission ) );
+  //pOrder->OnOrderCancelled.Add( MakeDelegate( this, &Position::HandleCancellation ) );
+  OrderManager::LocalCommonInstance().UpdateOrder( &(*m_pExecutionProvider), pOrder );
+
+  //OnPositionChanged( *this );  // TODO: should this be invoked?
+}
+
+void Position::CancelOrders() {
   // may have a problem getting out of sync with broker if orders are cancelled by broker
   // todo:  on power up, need to relink these active orders back in with the position
-  for ( std::vector<pOrder_t>::iterator iter = m_vOpenOrders.begin(); iter != m_vOpenOrders.end(); ++iter ) {
-    CancelOrder( iter );  // this won't work as the iterator is invalidated with each order removal
-  }
-  //m_OpenOrders.clear();
+  // or only use DAY orders
+  //for ( std::vector<pOrder_t>::iterator iter = m_vOpenOrders.begin(); iter != m_vOpenOrders.end(); ++iter ) {
+  //  CancelOrder( iter );  // this won't work as the iterator is invalidated with each order removal
+  //}
+  std::for_each(
+    m_vOpenOrders.begin(), m_vOpenOrders.end(), // need to be aware of multi-thread invalidating interator?
+    [this](pOrder_t& pOrder){
+      CancelOrder( pOrder );
+    });
 }
 
 void Position::CancelOrder( idOrder_t idOrder ) {
   for ( vOrders_t::iterator iter = m_vOpenOrders.begin(); iter != m_vOpenOrders.end(); ++iter ) {
     if ( idOrder == iter->get()->GetOrderId() ) {
       CancelOrder( iter );
-      //m_OpenOrders.erase( iter );
       break;
     }
   }
@@ -296,7 +364,7 @@ void Position::HandleCancellation( const Order& order ) {
   for ( vOrders_t::iterator iter = m_vOpenOrders.begin(); iter != m_vOpenOrders.end(); ++iter ) {
     if ( idOrder == iter->get()->GetOrderId() ) {
       if ( m_row.nPositionPending >= iter->get()->GetQuanRemaining() ) {
-        m_row.nPositionPending -= iter->get()->GetQuanRemaining(); 
+        m_row.nPositionPending -= iter->get()->GetQuanRemaining();
         if ( 0 == m_row.nPositionPending ) m_row.eOrderSidePending = OrderSide::Unknown;
         //CancelOrder( iter );
         m_vClosedOrders.push_back( *iter );
@@ -312,10 +380,14 @@ void Position::HandleCancellation( const Order& order ) {
 }
 
 void Position::CancelOrder( vOrders_iter_t iter ) {
-  OrderManager::LocalCommonInstance().CancelOrder( iter->get()->GetOrderId() );
+  CancelOrder( *iter );
 }
 
-void Position::ClosePosition( OrderType::enumOrderType eOrderType ) {
+void Position::CancelOrder( pOrder_t& pOrder ) {
+  OrderManager::LocalCommonInstance().CancelOrder( pOrder->GetOrderId() );
+}
+
+void Position::ClosePosition( OrderType::EOrderType eOrderType ) {
   // should outstanding orders be auto cancelled?
   // position is closed with a market order, can try to do limit in the future, but need active market data
   if ( 0 != m_row.nPositionActive ) {
@@ -332,7 +404,7 @@ void Position::ClosePosition( OrderType::enumOrderType eOrderType ) {
   }
 }
 
-void Position::UpdateRowValues( double price, boost::uint32_t quan, OrderSide::enumOrderSide side ) {
+void Position::UpdateRowValues( double price, boost::uint32_t quan, OrderSide::EOrderSide side ) {
 
   // can only be called by HandleExecution as HandleExecution uses the before and after values of RealizedPL
 
@@ -420,16 +492,16 @@ void Position::UpdateRowValues( double price, boost::uint32_t quan, OrderSide::e
 // before entry to this method, sanity check:  side on execution is same as side on order
 void Position::HandleExecution( const std::pair<const Order&, const Execution&>& status ) {
 
-  // should be able to calculate profit/loss & position cost as exections are encountered
+  // should be able to calculate profit/loss & position cost as executions are encountered
   // should be able to calculate position cost basis as position is updated (with and without commissions)
   // will need market feed in order to calculate profit/loss  -- handled in the OnQuote method
 
-  const Order& order = status.first;
-  const Execution& exec = status.second;
-  Order::idOrder_t orderId = order.GetOrderId();
+  const Order& order( status.first );
+  const Execution& exec( status.second );
+  const Order::idOrder_t orderId( order.GetOrderId() );
 
-  double dblOldRealizedPL = m_row.dblRealizedPL;
-  double dblOldUnRealizedPL = m_row.dblUnRealizedPL;
+  const double dblOldRealizedPL = m_row.dblRealizedPL;
+  const double dblOldUnRealizedPL = m_row.dblUnRealizedPL;
 
   //std::cout << "Position Exec: " << exec.GetSize() << "," << exec.GetPrice() << std::endl;
 
@@ -439,7 +511,7 @@ void Position::HandleExecution( const std::pair<const Order&, const Execution&>&
   if ( ( 0 == m_row.nPositionActive ) && ( OrderSide::Unknown != m_row.eOrderSideActive ) ) {
     std::cout << "problems" << std::endl;
   }
-  
+
   // check that we think that the order is still active
   bool bOrderFound = false;
   for ( std::vector<pOrder_t>::iterator iter = m_vOpenOrders.begin(); iter != m_vOpenOrders.end(); ++iter ) {
@@ -454,7 +526,7 @@ void Position::HandleExecution( const std::pair<const Order&, const Execution&>&
         m_vClosedOrders.push_back( *iter );
         m_vOpenOrders.erase( iter );
       }
-      
+
       bOrderFound = true;
       break;
     }
@@ -472,7 +544,7 @@ void Position::HandleExecution( const std::pair<const Order&, const Execution&>&
   OnExecution( PositionDelta_delegate_t( *this, dblOldRealizedPL, m_row.dblRealizedPL ) );  // used by portfolio updates
 
   OnPositionChanged( *this );
-  
+
 }
 
 void Position::HandleCommission( const Order& order ) {
@@ -488,16 +560,14 @@ void Position::HandleCommission( const Order& order ) {
   }
 }
 
-//void Position::EmitStatus( std::stringstream& ssStatus ) const {
 std::ostream& operator<<( std::ostream& os, const Position& position ) {
-  os 
-    << "Position " << position.m_pInstrument->GetInstrumentName() << ": "
+  os
+    << "Position " << position.m_pWatch->GetInstrument()->GetInstrumentName() << ": "
     << "Active " << position.m_row.nPositionActive
-    << ", unRPL " << position.m_row.dblUnRealizedPL 
+    << ", unRPL " << position.m_row.dblUnRealizedPL
     << ", RPL " << position.m_row.dblRealizedPL
     << ", Cmsn " << position.m_row.dblCommissionPaid
     << ", PL-C " << position.m_row.dblRealizedPL - position.m_row.dblCommissionPaid
-    << std::endl
     ;
   return os;
 }

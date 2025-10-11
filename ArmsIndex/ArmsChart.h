@@ -15,11 +15,7 @@
 
 #pragma once
 
-#ifdef _M_X64
-#include <OUCharting/ChartDirector64/chartdir.h>
-#else
-#include <OUCharting/ChartDirector/chartdir.h>
-#endif
+#include <chartdir/chartdir.h>
 
 class ArmsChart {
 public:

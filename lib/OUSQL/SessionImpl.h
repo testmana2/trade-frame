@@ -34,22 +34,20 @@
 // need to add transaction/commit/rollback capabilities
 
 // 2012/10/13
-// QueryFields has a problem.  Things have to be re-written so that a statement can be prepared 
+// QueryFields has a problem.  Things have to be re-written so that a statement can be prepared
 // independently of a supplied structure.  A new structure may be required on each execution of the statement.
 // Currently, the same physical structure needs to be re-used.  Structure is provided during statement construction,
 // not necessarily a good thing all the time.
 
 
-#include <string>
 #include <map>
-#include <vector>
-#include <stdexcept>
+#include <memory>
+#include <string>
 #include <typeinfo>
+#include <stdexcept>
 
-#include <boost/cstdint.hpp>
-#include <boost/intrusive_ptr.hpp>
-#include <boost/smart_ptr.hpp>
 #include <boost/noncopyable.hpp>
+#include <boost/intrusive_ptr.hpp>
 
 #include "Constants.h"
 #include "Actions.h"
@@ -75,29 +73,29 @@ protected:
   enum enumClause { EClauseNone, EClauseQuery, EClauseWhere, EClauseOrderBy, EClauseGroupBy, EClauseBind, EClauseNoExecute };
 public:
 
-  typedef boost::intrusive_ptr<QueryBase> pQueryBase_t;
+  using pQueryBase_t = boost::intrusive_ptr<QueryBase>;
 
-  QueryBase( void ): m_clause( EClauseNone ), m_bHasFields( false ), m_cntRef( 0 ), m_bPrepared( false ) {};
-  virtual ~QueryBase( void ) {};
+  QueryBase(): m_clause( EClauseNone ), m_bHasFields( false ), m_cntRef( 0 ), m_bPrepared( false ) {};
+  virtual ~QueryBase() {};
 
-  void SetHasFields( void ) { m_bHasFields = true; };
-  inline bool HasFields( void ) { return m_bHasFields; };
+  void SetHasFields() { m_bHasFields = true; };
+  inline bool HasFields() const { return m_bHasFields; };
 
-  void SetPrepared( void ) { m_bPrepared = true; };
-  inline bool IsPrepared( void ) { return m_bPrepared; };
+  void SetPrepared() { m_bPrepared = true; };
+  inline bool IsPrepared() const { return m_bPrepared; };
 
   // instrusive reference counting
-  size_t RefCnt( void ) { return m_cntRef; };
-  void Ref( void ) { ++m_cntRef; };
-  size_t UnRef( void ) { --m_cntRef; return m_cntRef; };
+  size_t RefCnt() const { return m_cntRef; };
+  void Ref() { ++m_cntRef; };
+  size_t UnRef() { --m_cntRef; return m_cntRef; };
 
-  std::string& UpdateQueryText( void ) { 
+  std::string& UpdateQueryText() {
 //    assert( EClauseQuery >= m_clause );
 //    m_clause = EClauseQuery;
-    return m_sQueryText; 
+    return m_sQueryText;
   };
 
-  const std::string& QueryText( void ) { return m_sQueryText; };
+  const std::string& QueryText() const { return m_sQueryText; };
 
 protected:
   enumClause m_clause;
@@ -111,13 +109,13 @@ private:
 // =====
 
 template<class F>  // used for returning structures to queriers
-class QueryFields: 
+class QueryFields:
   public QueryBase
 {
 public:
-  typedef boost::intrusive_ptr<QueryFields<F> > pQueryFields_t;
+  using pQueryFields_t = boost::intrusive_ptr<QueryFields<F> >;
   explicit QueryFields( F& f ): QueryBase(), var( f ) {};
-  ~QueryFields( void ) {};
+  virtual ~QueryFields() {};
   F& var;  // 2011/03/07  I want to make this a reference to a constant var at some point
    // will require mods to Bind, and will need Fields( A& a ) const, hopefully will work with the Actions passed in
 protected:
@@ -130,14 +128,17 @@ template<class F>
 class Query: public QueryFields<F> {  // rename to Query once SessionImpl Query has been renamed successfully
 public:
 
-  explicit Query( F& f ): m_bExecuteOneTime( false ), QueryFields<F>( f ) {};
-  ~Query( void ) {};
+  explicit Query( F& f )
+  : m_bExecuteOneTime( false ), QueryFields<F>( f ) {
+
+  };
+  ~Query() {};
 
   Query& Where( const std::string& sWhere ) { // todo: ensure sub clause ordering
     assert( QueryBase::EClauseWhere > QueryBase::m_clause );
     QueryBase::m_sQueryText += " WHERE " + sWhere;
     QueryBase::m_clause = QueryBase::EClauseWhere;
-    return *this; 
+    return *this;
   };
 
   Query& OrderBy( const std::string& sOrderBy ) { // todo: ensure sub clause ordering
@@ -154,50 +155,56 @@ public:
     return *this;
   }
 
-  Query& NoExecute( void ) {
+  Query& NoExecute() {
     assert( QueryBase::EClauseNoExecute > QueryBase::m_clause );
     m_bExecuteOneTime = false; // don't execute on the conversion
     QueryBase::m_clause = QueryBase::EClauseNoExecute;
     return *this;
   }
 
-  operator QueryFields<F>() { 
-    return dynamic_cast<QueryFields<F> >( *this );
-  }
+//  operator QueryFields<F>() {
+//    return dynamic_cast<QueryFields<F> >( *this );
+//  }
 
-  // conversion operator:  upon conversion from QueryState to QueryFields (upon assignment), execute the bind and execute
-  // may need to add an auto-reset before the bind:  therefore need m_bBound member variable
+  // conversion operator:  upon conversion from QueryState to QueryFields (upon assignment),
+  // execute the bind and execute may need to add an auto-reset before the bind:
+  //    therefore need m_bBound member variable
 /*
-  operator QueryFields<F>*() { 
+  operator QueryFields<F>*() {
     if ( m_bExecuteOneTime ) {
       ProcessInQueryState();
       m_bExecuteOneTime = false;
     }
-    return dynamic_cast<QueryFields<F>* >( this ); 
+    return dynamic_cast<QueryFields<F>* >( this );
   }
 */
 /*
-  operator QueryFields<F>&() { 
+  operator QueryFields<F>&() {
     if ( m_bExecuteOneTime ) {
       ProcessInQueryState();
       m_bExecuteOneTime = false;
     }
-    return dynamic_cast<QueryFields<F>&>( *this ); 
+    return dynamic_cast<QueryFields<F>&>( *this );
   }
 */
-  operator typename QueryFields<F>::pQueryFields_t() { // this one is actually used
+
+// reference:
+//   https://en.cppreference.com/w/cpp/language/cast_operator
+
+  // conversion operator
+  operator typename QueryFields<F>::pQueryFields_t() {
     if ( m_bExecuteOneTime ) {
       ProcessInQueryState();
       m_bExecuteOneTime = false;
     }
     typename QueryFields<F>::pQueryFields_t p( this );
-    return p; 
+    return p;
   }
 
-  void SetExecuteOneTime( void ) { m_bExecuteOneTime = true; };
+  void SetExecuteOneTime() { m_bExecuteOneTime = true; };
 
 protected:
-  virtual void ProcessInQueryState( void ) {};
+  virtual void ProcessInQueryState() {};
   bool m_bExecuteOneTime;
 private:
 };
@@ -219,22 +226,22 @@ void intrusive_ptr_release( Q* pq ) {
 // =====
 
 template<class SS, class F, class S>  // SS statement state, F fields, S session
-class QueryState: 
+class QueryState:
   public Query<F>,
   public SS // statement state
 {
 //  friend S;  // ** g++ does not like this, need to provide specific function?
 public:
 
-  typedef boost::intrusive_ptr<QueryState<SS, F, S> > pQueryState_t;
-
   QueryState( S& session, F& f ): Query<F>( f ), m_session( session ) {};
-  ~QueryState( void ) {};
+  virtual ~QueryState() {
+    m_session.Release( *this );
+  };
 
 protected:
 
-  void ProcessInQueryState( void ) {
-    if ( QueryBase::HasFields() ) {
+  void ProcessInQueryState() {
+    if ( QueryBase::HasFields() ) {  // who calls this, there fore had to virtual the destructor
       m_session.Bind( *this );
     }
     m_session.Execute( *this );
@@ -254,18 +261,19 @@ template<class IDatabase> // IDatabase is a the specific handler type:  sqlite3 
 class SessionImpl: boost::noncopyable {
 public:
 
-  typedef SessionImpl<IDatabase> session_t;
-  typedef boost::shared_ptr<session_t> pSession_t;
+  using session_t = SessionImpl<IDatabase>;
+  using pSession_t = std::shared_ptr<session_t>;
+  using pQueryBase_t = QueryBase::pQueryBase_t;
 
-  SessionImpl( void );
-  virtual ~SessionImpl( void );
+  SessionImpl();
+  virtual ~SessionImpl();
 
   void ImplOpen( const std::string& sDbFileName, enumOpenFlags flags = EOpenFlagsZero );
-  void ImplClose( void );
+  void ImplClose();
 
-  void CreateTables( void );
+  void CreateTables();
 
-  boost::int64_t GetLastRowId( void ) { return m_db.GetLastRowId(); };
+  int64_t GetLastRowId() { return m_db.GetLastRowId(); };  // call after an auto-increment insertion
 
   template<class F>
   void Bind( QueryFields<F>& qf ) {
@@ -297,7 +305,7 @@ public:
     return m_db.ExecuteStatement( StatementState );
   }
 
-  bool Execute( QueryBase::pQueryBase_t pQuery ) {
+  bool Execute( pQueryBase_t pQuery ) {
     return Execute( *pQuery.get() );
   }
 
@@ -309,7 +317,7 @@ public:
     columns.Fields( action );
   }
 
-  void Reset( QueryBase::pQueryBase_t pQuery ) {
+  void Reset( pQueryBase_t pQuery ) {
     typename IDatabase::structStatementState& StatementState
       = *dynamic_cast<typename IDatabase::structStatementState*>( pQuery.get() );
     m_db.ResetStatement( StatementState );
@@ -338,11 +346,9 @@ public:
     if ( 0 < action.FieldCount() ) pQuery->SetHasFields();
     action.ComposeCreateStatement( pQuery->UpdateQueryText() );
 
-    iter = m_mapTableDefs.insert( 
-      m_mapTableDefs.begin(), 
+    iter = m_mapTableDefs.insert(
+      m_mapTableDefs.begin(),
       mapTableDefs_pair_t( sTableName, pQuery) );
-
-    m_vQuery.push_back( pQuery );
 
     return *pQuery;
 
@@ -379,8 +385,6 @@ public:
     pQuery->UpdateQueryText() = sSqlQuery;
 
     pQuery->SetExecuteOneTime();
-    
-    m_vQuery.push_back( pQuery );
 
     return *pQuery;
   }
@@ -390,6 +394,10 @@ public:
   QueryState<typename IDatabase::structStatementState, F, session_t>& SQL( const std::string& sSqlQuery ) {
     F f;  // warning, this variable goes out of scope before the query is destroyed
     return SQL( sSqlQuery, f );
+  }
+
+  void Release( typename IDatabase::structStatementState& statement ) {
+    m_db.CloseStatement( statement );
   }
 
   template<class F>
@@ -409,8 +417,7 @@ public:
 protected:
 
   template<class F>
-  //const std::string& MapFieldsToTable( void ) {
-  const std::string& GetTableName( void ) {
+  const std::string& GetTableName() {
     std::string t( typeid( F ).name() );
     mapFieldsToTable_iter_t iter = m_mapFieldsToTable.find( t );
     if ( m_mapFieldsToTable.end() == iter ) {
@@ -422,10 +429,10 @@ protected:
   template<class F, class Action>  // do reset, auto bind when doing execute
   QueryState<typename IDatabase::structStatementState, F, session_t>& ComposeSql( F& f ) {
 
-    typedef QueryState<typename IDatabase::structStatementState, F, session_t> query_t;
+    using query_t = QueryState<typename IDatabase::structStatementState, F, session_t>;
 
     query_t* pQuery = new query_t( *this, f );
-    
+
     Action action( GetTableName<F>() );
     f.Fields( action );
     if ( 0 < action.FieldCount() ) pQuery->SetHasFields();
@@ -433,31 +440,19 @@ protected:
 
     pQuery->SetExecuteOneTime();
 
-    m_vQuery.push_back( pQuery );
-
     return *pQuery;
   }
 
 private:
 
   bool m_bOpened;
-  
-  IDatabase m_db;
 
-  typedef QueryBase::pQueryBase_t pQueryBase_t;
+  IDatabase m_db;
 
   typedef std::map<std::string, pQueryBase_t> mapTableDefs_t;  // map table name to table definition
   typedef typename mapTableDefs_t::iterator mapTableDefs_iter_t;
   typedef std::pair<std::string, pQueryBase_t> mapTableDefs_pair_t;
   mapTableDefs_t m_mapTableDefs;
-
-  typedef std::vector<pQueryBase_t> vQuery_t;
-  typedef vQuery_t::iterator vQuery_iter_t;
-  vQuery_t m_vQuery;  // 2013/08/26
-  // this is a bad thing to have around, statements should be closed after use.
-  // don't worry about re-use, cross that bridge later.
-  // in one application there are 32,000 queries, and none are closed,
-  // resulting in very long times to reclaim space at the end
 
   typedef std::map<std::string, std::string> mapFieldsToTable_t;
   typedef mapFieldsToTable_t::iterator mapFieldsToTable_iter_t;
@@ -468,12 +463,12 @@ private:
 
 // Constructor
 template<class IDatabase>
-SessionImpl<IDatabase>::SessionImpl( void ): m_bOpened( false ) {
+SessionImpl<IDatabase>::SessionImpl(): m_bOpened( false ) {
 }
 
 // Destructor
 template<class IDatabase>
-SessionImpl<IDatabase>::~SessionImpl(void) {
+SessionImpl<IDatabase>::~SessionImpl() {
   ImplClose();
 }
 
@@ -492,16 +487,10 @@ void SessionImpl<IDatabase>::ImplOpen( const std::string& sDbFileName, enumOpenF
 
 // Close
 template<class IDatabase>
-void SessionImpl<IDatabase>::ImplClose( void ) {
+void SessionImpl<IDatabase>::ImplClose() {
   if ( m_bOpened ) {
-    m_mapTableDefs.clear();
-    for ( vQuery_iter_t iter = m_vQuery.begin(); iter != m_vQuery.end(); ++iter ) {
-      m_db.CloseStatement( *dynamic_cast<typename IDatabase::structStatementState*>( iter->get() ) );
-      iter->reset();
-    }
-    m_vQuery.clear();
-    m_db.SessionClose();
     m_bOpened = false;
+    m_db.SessionClose();
     // 2013/08/26 process memory doesn't appear to be relaimed after this
     //   trying again with addition of reset();
   }
@@ -509,11 +498,12 @@ void SessionImpl<IDatabase>::ImplClose( void ) {
 
 // CreateTables
 template<class IDatabase>
-void SessionImpl<IDatabase>::CreateTables( void ) {
+void SessionImpl<IDatabase>::CreateTables() {
   // todo: need to add a transaction around this set of instructions
   for ( mapTableDefs_iter_t iter = m_mapTableDefs.begin(); m_mapTableDefs.end() != iter; ++iter ) {
     Execute( iter->second );
   }
+  m_mapTableDefs.clear();
 }
 
 } // db

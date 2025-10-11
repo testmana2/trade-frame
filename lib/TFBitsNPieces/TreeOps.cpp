@@ -20,7 +20,6 @@
 #include <boost/phoenix/core/argument.hpp>
 
 #include <wx/wx.h>
-//#include <wx-3.0/wx/window.h>
 
 #include "TreeOps.h"
 
@@ -70,11 +69,25 @@ void TreeOps::CreateControls() {
   wxTreeCtrl::Bind( wxEVT_TREE_SEL_CHANGING, &TreeOps::HandleSelectionChanging, this );
   wxTreeCtrl::Bind( wxEVT_TREE_ITEM_ACTIVATED, &TreeOps::HandleItemActivated, this );
   wxTreeCtrl::Bind( wxEVT_TREE_DELETE_ITEM, &TreeOps::HandleItemDeleted, this );
+  wxTreeCtrl::Bind( wxEVT_TREE_BEGIN_DRAG, &TreeOps::HandleBeginDrag, this );
+  wxTreeCtrl::Bind( wxEVT_TREE_END_DRAG, &TreeOps::HandleEndDrag, this );
+  wxTreeCtrl::Bind( wxEVT_DESTROY, &TreeOps::HandleWindowDestroy, this );
   
   //wxTreeItemId id = wxTreeCtrl::AddRoot( "Root" );  // can be renamed
   //m_pTreeItemRoot.reset( new TreeItemRoot( id, m_resources ) );
   //m_mapDecoder.insert( mapDecoder_t::value_type( id.GetID(), m_pTreeItemRoot ) );
   
+}
+
+void TreeOps::HandleWindowDestroy( wxWindowDestroyEvent& event ) {
+  wxTreeCtrl::Unbind( wxEVT_TREE_ITEM_MENU, &TreeOps::HandleContextMenu, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_SEL_CHANGED, &TreeOps::HandleSelectionChanged, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_SEL_CHANGING, &TreeOps::HandleSelectionChanging, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_ITEM_ACTIVATED, &TreeOps::HandleItemActivated, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_DELETE_ITEM, &TreeOps::HandleItemDeleted, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_BEGIN_DRAG, &TreeOps::HandleBeginDrag, this );
+  wxTreeCtrl::Unbind( wxEVT_TREE_END_DRAG, &TreeOps::HandleEndDrag, this );
+  wxTreeCtrl::Unbind( wxEVT_DESTROY, &TreeOps::HandleWindowDestroy, this );
 }
 
 void TreeOps::Add( const wxTreeItemId& id, pTreeItemBase_t pTreeItemBase ) {
@@ -129,16 +142,27 @@ void TreeOps::HandleSelectionChanging( wxTreeEvent& event ) {
 void TreeOps::HandleSelectionChanged( wxTreeEvent& event ) {
   //std::cout << "HandleSelectionChanged " << event.GetId() << "," << event.GetItem().GetID() << std::endl;  // triggered second (object b))
   m_idOld = event.GetItem();
+  m_mapDecoder[ event.GetItem().GetID() ]->HandleOnClick();
   //m_mapDecoder[ m_idOld.GetID() ]->SetSelected( m_guiElements );
   
 }
 
 void TreeOps::HandleItemActivated( wxTreeEvent& event ) {
   //std::cout << "HandleItemActivated" << std::endl; // doesn't appear to be triggered
+  //m_mapDecoder[ event.GetItem().GetID() ]->HandleOnClick();
+  //signalActivateItem( event.GetItem().GetID() );
 }
 
 void TreeOps::HandleItemDeleted( wxTreeEvent& event ) {
   //std::cout << "HandleItemDeleted" << std::endl;
+}
+
+void TreeOps::HandleBeginDrag( wxTreeEvent& event ) {
+  std::cout << "HandleBeginDrag" << std::endl;
+}
+
+void TreeOps::HandleEndDrag( wxTreeEvent& event ) {
+  std::cout << "HandleEndDrag" << std::endl;
 }
 
 wxBitmap TreeOps::GetBitmapResource( const wxString& name ) {
@@ -186,10 +210,11 @@ void TreeOps::PopulateResources( TreeItemResources& resources ) {
   resources.signalDelete.connect( boost::phoenix::bind( &TreeOps::Delete, this, args::arg1 ) );
   resources.signalGetInput.connect( boost::phoenix::bind( &TreeOps::GetInput, this, args::arg1, args::arg2 ) );
   resources.signalGetItemText.connect( boost::phoenix::bind( &TreeOps::GetItemText, this, args::arg1 ) );
-  resources.signalPopupMenu.connect( boost::phoenix::bind( &TreeOps::PopupMenu, this, args::arg1, wxDefaultPosition ) );
+  resources.signalPopupMenu.connect( boost::phoenix::bind(static_cast<bool(TreeOps::*)(wxMenu *,const wxPoint& )>(&TreeOps::PopupMenu), this, args::arg1, wxDefaultPosition ) );
   resources.signalSetItemText.connect( boost::phoenix::bind( &TreeOps::SetItemText, this, args::arg1, args::arg2 ) );
   resources.signalAppendItem.connect( boost::phoenix::bind( &TreeOps::AppendItem, this, args::arg1, args::arg2, -1, -1, (wxTreeItemData*)0 ) );
   resources.signalEnsureVisible.connect( boost::phoenix::bind( &TreeOps::EnsureVisible, this, args::arg1 ) );
+  //resources.signalActivateItem.connect( boost::phoenix::bind( &TreeOps::ActivateItem, this, rags::arg1 ) );
 }
 
 } // namespace tf

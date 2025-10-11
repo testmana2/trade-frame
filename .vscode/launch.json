@@ -1,0 +1,603 @@
+{
+  // Use IntelliSense to learn about possible attributes.
+  // Hover to view descriptions of existing attributes.
+  // For more information, visit: https://go.microsoft.com/fwlink/?linkid=830387
+  "version": "0.2.0",
+  "logging": {
+    "trace": true,
+    "traceResponse": true,
+    "engineLogging": true
+  },
+  "configurations": [
+
+    {
+      "name": "(gdb) Option Trader",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/OptionTrader/OptionTrader",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Bar Chart Viewer",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/BarChart/BarChart",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) S&P 500 Trader",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/SP500/SP500_gui",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Web Trader",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/WebTrader/AppWebTrader",
+      "args": [ "--docroot='web;/favicon.ico,/resources,/style,/image'", "--http-address=0.0.0.0", "--http-port=8091", "--config=etc/wt_config.xml"],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/AppWebTrader",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Market Trader",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/MarketTrader/MarketTrader",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Currency Trader",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/CurrencyTrader/CurrencyTrader",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) BasketTrading",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/BasketTrading/BasketTrading",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) ComboTrading",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/ComboTrading/ComboTrading",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) AutoTrade",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/AutoTrade/AutoTrade",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) IndicatorTrading",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/IndicatorTrading/IndicatorTrading",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) ArmsIndex",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/ArmsIndex/ArmsIndex",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) rdaf/l2",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/rdaf/l2/rdaf_l2",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) HedgedBollinger",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/HedgedBollinger/HedgedBollinger",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Collector",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Collector/Collector",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) AppDoM",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/DepthOfMarket/DepthOfMarket",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Dividend",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Dividend/Dividend",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) rdaf/dl/download",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/rdaf/dl/download",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Hdf5Chart",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Hdf5Chart/Hdf5Chart",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Phemex",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Phemex/Phemex",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Alpaca",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Alpaca/Alpaca",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) IQFeedMarketSymbols",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/IQFeedMarketSymbols/IQFeedMarketSymbols",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) IQFeedGetHistory",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/IQFeedGetHistory//IQFeedGetHistory",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) rdaf/at",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/rdaf/at/rdaf_at",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) rdaf/l1",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/rdaf/l1",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) Weeklies",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/Weeklies/Weeklies",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) LiveChart",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/LiveChart/LiveChart",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) MultipleFutures",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/MultipleFutures/AppMultipleFutures",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+    {
+      "name": "(gdb) ESBracketOrder",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/ESBracketOrder/ESBracketOrder",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}/x64/debug",
+      "environment": [],
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "setupCommands": [
+        {
+          "description": "Enable pretty-printing for gdb",
+          "text": "-enable-pretty-printing",
+          "ignoreFailures": true
+        }
+      ],
+      "miDebuggerPath": "/usr/bin/gdb"
+    },
+
+
+  ]
+}

@@ -12,26 +12,24 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <iostream>
 
 #include <math.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
-//using namespace boost::posix_time;
-//using namespace boost::gregorian;
 
 #include <boost/phoenix/bind/bind_member_function.hpp>
 #include <boost/lexical_cast.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/filesystem.hpp>
 #include <boost/timer/timer.hpp>
 
 #include <boost/foreach.hpp>
 
-#include <wx/splitter.h>
 #include <wx/panel.h>
+#include <wx/sizer.h>
+#include <wx/treectrl.h>
+#include <wx/splitter.h>
 
 #include <OUCommon/TimeSource.h>
 
@@ -45,11 +43,17 @@
 
 #include "HedgedBollinger.h"
 
+/*
+ * 2018/07/10 use reversion to mean trading
+ *   on touch high bollinger, sell equity, and buy call to hedge
+ *   on touch low bollinger, buy equity, and buy put to hedge
+ */
+
 IMPLEMENT_APP(AppHedgedBollinger)
 
-size_t atm = 125;
+const size_t atm = 125;
 
-unsigned int AppHedgedBollinger::m_nthIVCalc( 4 );
+const unsigned int AppHedgedBollinger::m_nthIVCalc( 4 );
 
 bool AppHedgedBollinger::OnInit() {
 
@@ -93,11 +97,11 @@ bool AppHedgedBollinger::OnInit() {
 
   // m_pPanelProviderControl
   m_pPanelProviderControl = new ou::tf::PanelProviderControl( m_panelSplitterRight, wxID_ANY );
-  m_sizerSplitterRight->Add( m_pPanelProviderControl, 0, wxEXPAND|wxALIGN_LEFT|wxRIGHT, 1);
+  m_sizerSplitterRight->Add( m_pPanelProviderControl, 0, wxEXPAND|wxRIGHT, 1);
 
   // m_pPanelLogging
   m_pPanelLogging = new ou::tf::PanelLogging( m_panelSplitterRight, wxID_ANY );
-  m_sizerSplitterRight->Add( m_pPanelLogging, 1, wxALL | wxEXPAND|wxALIGN_LEFT|wxALIGN_RIGHT|wxALIGN_TOP|wxALIGN_BOTTOM, 1);
+  m_sizerSplitterRight->Add( m_pPanelLogging, 1, wxALL | wxEXPAND, 1);
 
   // startup splitter
   m_splitterRow1->SplitVertically(m_ptreeChartables, m_panelSplitterRight, 10);
@@ -108,12 +112,12 @@ bool AppHedgedBollinger::OnInit() {
   LinkToPanelProviderControl();
 
 //  m_pPanelManualOrder = new ou::tf::PanelManualOrder( m_pFrameMain, wxID_ANY );
-//  m_sizerControls->Add( m_pPanelManualOrder, 0, wxEXPAND|wxALIGN_LEFT|wxRIGHT, 5);
+//  m_sizerControls->Add( m_pPanelManualOrder, 0, wxEXPAND|wxRIGHT, 5);
 //  m_pPanelManualOrder->Show( true );
 
 /*
   m_pPanelOptionsParameters = new PanelOptionsParameters( m_pFrameMain, wxID_ANY );
-  m_sizerControls->Add( m_pPanelOptionsParameters, 1, wxEXPAND|wxALIGN_LEFT, 0);
+  m_sizerControls->Add( m_pPanelOptionsParameters, 1, wxEXPAND, 0);
   m_pPanelOptionsParameters->Show( true );
   m_pPanelOptionsParameters->SetOnStart( MakeDelegate( this, &AppStrategyRunner::HandleBtnStart ) );
   m_pPanelOptionsParameters->SetOnStop( MakeDelegate( this, &AppStrategyRunner::HandleBtnStop ) );
@@ -125,14 +129,16 @@ bool AppHedgedBollinger::OnInit() {
 //  wxBoxSizer* m_sizerStatus = new wxBoxSizer( wxHORIZONTAL );
 //  m_sizerMain->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
 
+  m_pFrameMain->SetAutoLayout( true );
+  m_pFrameMain->Layout();
   m_pFrameMain->Show( true );
-  
+
   // ** Note:  turn on iqfeed only, symbols not set for IB yet
 
   m_sNameUnderlying = "QGC";
   //m_sNameUnderlyingIQFeed = "QGCG16";  // IB won't allow trading within 30 days of expiration.
-  m_sNameUnderlyingIQFeed = ou::tf::iqfeed::BuildFuturesName( "QGC", 2017, 4 );
-  
+  m_sNameUnderlyingIQFeed = ou::tf::iqfeed::BuildFuturesName( "QGC", 2023, 3 );
+
   std::cout << "Underlying: " << m_sNameUnderlyingIQFeed << std::endl;
 
   // opra equity calc
@@ -148,7 +154,7 @@ bool AppHedgedBollinger::OnInit() {
 
   // http://www.cboe.com/products/EquityOptionSpecs.aspx
   //Expiration Date:
-  //Saturday immediately following the third Friday of the expiration month until February 15, 2015. 
+  //Saturday immediately following the third Friday of the expiration month until February 15, 2015.
   //  On and after February 15, 2015, the expiration date will be the third Friday of the expiration month.
 
   //Expiration Months:
@@ -157,12 +163,12 @@ bool AppHedgedBollinger::OnInit() {
 
   m_sNameOptionUnderlying = "QGC";  // GC is regular open outcry symbol, QGC are options tradeable 24 hours
 
-  m_dateFrontMonthOption = boost::gregorian::date( 2017, 3, 28 );
-  m_dateSecondMonthOption = boost::gregorian::date( 2017, 4, 25 );
+   m_dateFrontMonthOption = boost::gregorian::date( 2019, 5, 28 );
+  m_dateSecondMonthOption = boost::gregorian::date( 2019, 6, 25 );
 
-  m_winChartView = new ou::tf::WinChartView( m_pFrameMain, wxID_ANY, wxDefaultPosition, wxSize(160, 90), wxNO_BORDER );
-  m_sizerFrame->Add( m_winChartView, 1, wxALL|wxEXPAND, 3);
-  
+  m_pWinChartView = new ou::tf::WinChartView( m_pFrameMain, wxID_ANY, wxDefaultPosition, wxSize(160, 90), wxNO_BORDER );
+  m_sizerFrame->Add( m_pWinChartView, 1, wxALL|wxEXPAND, 3);
+
   // should already be initialized in the framework
   //m_bData1Connected = false;
   //m_bData2Connected = false;
@@ -190,7 +196,7 @@ bool AppHedgedBollinger::OnInit() {
     if ( boost::filesystem::exists( sDbName ) ) {
       boost::filesystem::remove( sDbName );
     }
-    
+
     m_db.OnRegisterTables.Add( MakeDelegate( this, &AppHedgedBollinger::HandleRegisterTables ) );
     m_db.OnRegisterRows.Add( MakeDelegate( this, &AppHedgedBollinger::HandleRegisterRows ) );
     m_db.SetOnPopulateDatabaseHandler( MakeDelegate( this, &AppHedgedBollinger::HandlePopulateDatabase ) );
@@ -228,21 +234,19 @@ void AppHedgedBollinger::HandleMenuActionEmitStrategyValues( void ) {
 }
 
 void AppHedgedBollinger::HandleMenuActionStartChart( void ) {
-  m_winChartView->ActivateChart( true );
-  //m_bReadyToDrawChart = true;
+  m_pWinChartView->SetChartDataView( m_pStrategy->GetChartDataView() );
 }
 
-void AppHedgedBollinger::HandleMenuA
-m_winChartView->ActivateChart( false );
-  //m_bReadyToDrawChart = false;
+void AppHedgedBollinger::HandleMenuActionStopChart( void ) {
+  m_pWinChartView->SetChartDataView( nullptr );
 }
 
-void AppHedgedBollinger::HandleSize( wxSizeEvent& event ) { 
-  m_winChartView->DrawChart();
+void AppHedgedBollinger::HandleSize( wxSizeEvent& event ) {
+  //m_winChartView->DrawChart();
   //StartDrawChart();
 }
 
-void AppHedgedBollinger::HandleMouse( wxMouseEvent& event ) { 
+void AppHedgedBollinger::HandleMouse( wxMouseEvent& event ) {
   event.Skip();
 }
 
@@ -252,7 +256,7 @@ void AppHedgedBollinger::HandlePaint( wxPaintEvent& event ) {
 //    dc.DrawBitmap( *m_pChartBitmap, 0, 0);
 //    m_bInDrawChart = false;
 //  }
-  //else 
+  //else
   event.Skip();
 }
 
@@ -264,7 +268,7 @@ void AppHedgedBollinger::HandleMenuActionStartWatch( void ) {
   m_bIVCalcActive = false;
 
   ptime dt;
-  ou::TimeSource::Instance().Internal( &dt );
+  ou::TimeSource::GlobalInstance().Internal( &dt );
   m_dtTopOfMinute = dt + time_duration( 0, 1, 0 ) - time_duration( 0, 0, dt.time_of_day().seconds() );
   m_timerGuiRefresh.Start( 250 );
 
@@ -331,8 +335,8 @@ void AppHedgedBollinger::HandleMenuActionInitializeSymbolSet( void ) {
           pInstrumentUnderlying->SetAlternateName( ou::tf::Instrument::eidProvider_t::EProviderIQF, m_sNameUnderlyingIQFeed );
           FinishStrategyInitialization( pInstrumentUnderlying );
           break;
-        case EProviderUsageReadTrade: 
-          ou::tf::IBTWS::Contract contract;
+        case EProviderUsageReadTrade:
+          ou::tf::ib::TWS::Contract contract;
           contract.symbol = m_sNameUnderlying;
           //contract.exchange = "SMART";
           contract.exchange = "NYMEX";
@@ -340,13 +344,15 @@ void AppHedgedBollinger::HandleMenuActionInitializeSymbolSet( void ) {
           contract.secType = "FUT";
           //m_tws->ContractExpiryField( contract, m_dateFrontMonthFuture.year(), m_dateFrontMonthFuture.month(), m_dateFrontMonthFuture.day() );
           //m_tws->ContractExpiryField( contract, m_dateFrontMonthOption.year(), m_dateFrontMonthOption.month() ); // can't trade in final 30 days
-          m_tws->ContractExpiryField( contract, m_dateSecondMonthOption.year(), m_dateSecondMonthOption.month() );  
+          m_tws->ContractExpiryField( contract, m_dateSecondMonthOption.year(), m_dateSecondMonthOption.month() );
           //contract.secType = "OPT";
           //contract.secType = "FOP";
-          m_tws->RequestContractDetails( 
-            contract, 
-            MakeDelegate( this, &AppHedgedBollinger::HandleIBUnderlyingContractDetails ), 
-            MakeDelegate( this, &AppHedgedBollinger::HandleIBUnderlyingContractDetailsDone ) );
+          namespace ph = std::placeholders;
+          m_tws->RequestContractDetails(
+            contract,
+            std::bind( &AppHedgedBollinger::HandleIBUnderlyingContractDetails, this, ph::_1, ph::_2 ),
+            std::bind( &AppHedgedBollinger::HandleIBUnderlyingContractDetailsDone, this, ph::_1 )
+          );
           break;
         }
 
@@ -359,35 +365,35 @@ void AppHedgedBollinger::HandleMenuActionInitializeSymbolSet( void ) {
   }
 }
 
-void AppHedgedBollinger::HandleIBUnderlyingContractDetails( const ou::tf::IBTWS::ContractDetails& details, pInstrument_t& pInstrumentUnderlying ) {
+void AppHedgedBollinger::HandleIBUnderlyingContractDetails( const ou::tf::ib::TWS::ContractDetails& details, pInstrument_t& pInstrumentUnderlying ) {
   // should only be one symbol arriving
   pInstrumentUnderlying->SetAlternateName( ou::tf::Instrument::eidProvider_t::EProviderIQF, m_sNameUnderlyingIQFeed );
   FinishStrategyInitialization( pInstrumentUnderlying );
 }
 
-void AppHedgedBollinger::HandleIBUnderlyingContractDetailsDone( void ) {
+void AppHedgedBollinger::HandleIBUnderlyingContractDetailsDone( bool ) {
 }
 
 void AppHedgedBollinger::FinishStrategyInitialization( pInstrument_t pInstrumentUnderlying ) {
 
   // instrument needs to be registered with InstrumentManager
-  ou::tf::InstrumentManager::Instance().Register( pInstrumentUnderlying );
+  ou::tf::InstrumentManager::GlobalInstance().Register( pInstrumentUnderlying );
 
   // tradeable options will need to be registered with the InstrumentManager
   // suitable portfolios and positions need to be managed with PortfolioManager
 
   // work out current expiry and next expiry
-  ptime now = ou::TimeSource::Instance().External();
+  ptime now = ou::TimeSource::GlobalInstance().External();
 
   assert( m_dateFrontMonthOption > now.date() );
 
   // use 16:00 est as time of expiry, as that is when they cease trading (for OPRA equities)
   // 18:30 deals with after hours trading and settlements on the underlying.  the options cease trading at 16:00.
 
-  ptime dtFrontMonthExpiryUtc( 
-    ou::TimeSource::Instance().ConvertRegionalToUtc( m_dateFrontMonthOption, time_duration( 13, 30, 0 ), "America/New_York", true ) );
-  ptime dtSecondMonthExpiryUtc( 
-    ou::TimeSource::Instance().ConvertRegionalToUtc( m_dateSecondMonthOption, time_duration( 13, 30, 0 ), "America/New_York", true ) );
+  ptime dtFrontMonthExpiryUtc(
+    ou::TimeSource::GlobalInstance().ConvertRegionalToUtc( m_dateFrontMonthOption, time_duration( 13, 30, 0 ), "America/New_York" ) );
+  ptime dtSecondMonthExpiryUtc(
+    ou::TimeSource::GlobalInstance().ConvertRegionalToUtc( m_dateSecondMonthOption, time_duration( 13, 30, 0 ), "America/New_York" ) );
 
   std::cout << "Expiry strings: " << dtFrontMonthExpiryUtc << ", " << dtSecondMonthExpiryUtc << std::endl;
   std::cout << "Expiry strings: " << m_dateFrontMonthOption << ", " << m_dateSecondMonthOption << std::endl;
@@ -406,11 +412,12 @@ void AppHedgedBollinger::FinishStrategyInitialization( pInstrument_t pInstrument
 
   m_pBundle->Portfolio() = m_pPortfolioGC;
 //  m_pBundle->Portfolio()
-//    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+//    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
 //      m_sNameOptionUnderlying, "aoRay", "USD", ou::tf::Portfolio::MultiLeggedPosition, ou::tf::Currency::Name[ ou::tf::Currency::USD ], m_sNameUnderlying + " Hedge" );
 
   m_pStrategy = new Strategy( m_pBundle, m_pPortfolioGCLongs, m_pPortfolioGCShorts, m_pExecutionProvider );
-  m_pStrategy->GetChartDataView().SetNames( "HedgedBollinger", m_sNameUnderlying );
+  // need to check next line for nullptr?
+  m_pStrategy->GetChartDataView()->SetNames( "HedgedBollinger", m_sNameUnderlying );
 
   m_pBundle->AddOnStrikeWatchOn( MakeDelegate( this, &AppHedgedBollinger::HandleStrikeWatchOn ) );
   m_pBundle->AddOnStrikeWatchOff( MakeDelegate( this, &AppHedgedBollinger::HandleStrikeWatchOff ) );
@@ -450,7 +457,7 @@ void AppHedgedBollinger::HandleMenuAction0ObtainNewIQFeedSymbolListRemote( void 
 
 void AppHedgedBollinger::HandleObtainNewIQFeedSymbolListRemote( void ) {
   std::cout << "Downloading Text File ... " << std::endl;
-  ou::tf::iqfeed::LoadMktSymbols( m_listIQFeedSymbols, ou::tf::iqfeed::MktSymbolLoadType::Download, true ); 
+  ou::tf::iqfeed::LoadMktSymbols( m_listIQFeedSymbols, ou::tf::iqfeed::MktSymbolLoadType::Download, true );
   std::cout << "Saving Binary File ... " << std::endl;
   m_listIQFeedSymbols.SaveToFile( "../symbols.ser" );
   std::cout << " ... done." << std::endl;
@@ -463,7 +470,7 @@ void AppHedgedBollinger::HandleMenuAction1ObtainNewIQFeedSymbolListLocal( void )
 
 void AppHedgedBollinger::HandleObtainNewIQFeedSymbolListLocal( void ) {
   std::cout << "Loading From Text File ... " << std::endl;
-  ou::tf::iqfeed::LoadMktSymbols( m_listIQFeedSymbols, ou::tf::iqfeed::MktSymbolLoadType::LoadTextFromDisk, false ); 
+  ou::tf::iqfeed::LoadMktSymbols( m_listIQFeedSymbols, ou::tf::iqfeed::MktSymbolLoadType::LoadTextFromDisk, false );
   std::cout << "Saving Binary File ... " << std::endl;
   m_listIQFeedSymbols.SaveToFile( "../symbols.ser" );
   std::cout << " ... done." << std::endl;
@@ -480,7 +487,6 @@ void AppHedgedBollinger::HandleLoadIQFeedSymbolList( void ) {
   std::cout << " ... completed." << std::endl;
 }
 
-
 void AppHedgedBollinger::HandleGuiRefresh( wxTimerEvent& event ) {
   // update portfolio results and tracker timeseries for portfolio value
 //  double dblUnRealized;
@@ -490,7 +496,7 @@ void AppHedgedBollinger::HandleGuiRefresh( wxTimerEvent& event ) {
   double dblCurrent = dblUnRealized + dblRealized - dblCommissionsPaid;
   m_dblMaxPL = std::max<double>( m_dblMaxPL, dblCurrent );
   m_dblMinPL = std::min<double>( m_dblMinPL, dblCurrent );
-  m_pPanelPortfolioStats->SetStats( 
+  m_pPanelPortfolioStats->SetStats(
     boost::lexical_cast<std::string>( m_dblMinPL ),
     boost::lexical_cast<std::string>( dblCurrent ),
     boost::lexical_cast<std::string>( m_dblMaxPL )
@@ -506,7 +512,7 @@ void AppHedgedBollinger::HandleGuiRefresh( wxTimerEvent& event ) {
         m_cntIVCalc = m_nthIVCalc;
         if ( 0 != m_pthreadIVCalc ) delete m_pthreadIVCalc;
         m_bIVCalcActive = true;
-        m_pthreadIVCalc = new boost::thread( boost::bind( &AppHedgedBollinger::CalcIV, this, ou::TimeSource::Instance().External() ) );
+        m_pthreadIVCalc = new boost::thread( boost::bind( &AppHedgedBollinger::CalcIV, this, ou::TimeSource::GlobalInstance().External() ) );
       }
     }
   //}
@@ -534,7 +540,7 @@ void AppHedgedBollinger::UpdateTree( ou::tf::option::Option* pOption, bool bWatc
   wxTreeItemIdValue idCookie;
   const std::string& sName( pOption->GetInstrument()->GetInstrumentName() );
   wxTreeItemId idRoot = m_ptreeChartables->GetRootItem();
-  wxTreeItemId idChild = m_ptreeChartables->GetFirstChild( idRoot, idCookie ); 
+  wxTreeItemId idChild = m_ptreeChartables->GetFirstChild( idRoot, idCookie );
   bool bFound( false );
   while ( idChild.IsOk() ) {
     if ( sName == reinterpret_cast<container*>( m_ptreeChartables->GetItemData( idChild ) )->pOption->GetInstrument()->GetInstrumentName() ) {
@@ -585,7 +591,7 @@ void AppHedgedBollinger::OnClose( wxCloseEvent& event ) {
   DelinkFromPanelProviderControl();
 //  if ( 0 != OnPanelClosing ) OnPanelClosing();
   // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+  // event.CanVeto(); // if not a
   event.Skip();  // auto followed by Destroy();
 }
 
@@ -635,43 +641,43 @@ void AppHedgedBollinger::HandleRegisterRows(  ou::db::Session& session ) {
 
 void AppHedgedBollinger::HandlePopulateDatabase( void ) {
 
-  ou::tf::AccountManager::pAccountAdvisor_t pAccountAdvisor 
-    = ou::tf::AccountManager::Instance().ConstructAccountAdvisor( "aaRay", "Raymond Burkholder", "One Unified" );
+  ou::tf::AccountManager::pAccountAdvisor_t pAccountAdvisor
+    = ou::tf::AccountManager::GlobalInstance().ConstructAccountAdvisor( "aaRay", "Raymond Burkholder", "One Unified" );
 
   ou::tf::AccountManager::pAccountOwner_t pAccountOwner
-    = ou::tf::AccountManager::Instance().ConstructAccountOwner( "aoRay", "aaRay", "Raymond", "Burkholder" );
+    = ou::tf::AccountManager::GlobalInstance().ConstructAccountOwner( "aoRay", "aaRay", "Raymond", "Burkholder" );
 
   ou::tf::AccountManager::pAccount_t pAccountIB
-    = ou::tf::AccountManager::Instance().ConstructAccount( "ib01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIB, "Interactive Brokers", "acctid", "login", "password" );
+    = ou::tf::AccountManager::GlobalInstance().ConstructAccount( "ib01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIB, "Interactive Brokers", "acctid", "login", "password" );
 
   ou::tf::AccountManager::pAccount_t pAccountIQFeed
-    = ou::tf::AccountManager::Instance().ConstructAccount( "iq01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIQF, "IQFeed", "acctid", "login", "password" );
+    = ou::tf::AccountManager::GlobalInstance().ConstructAccount( "iq01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIQF, "IQFeed", "acctid", "login", "password" );
 
   ou::tf::AccountManager::pAccount_t pAccountSimulator
-    = ou::tf::AccountManager::Instance().ConstructAccount( "sim01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderSimulator, "Sim", "acctid", "login", "password" );
+    = ou::tf::AccountManager::GlobalInstance().ConstructAccount( "sim01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderSimulator, "Sim", "acctid", "login", "password" );
 
   m_pPortfolioMaster
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
     "Master", "aoRay", "", ou::tf::Portfolio::Master, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Master Summary" );
 
   m_pPortfolioCurrencyUSD
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
     "USD", "aoRay", "Master", ou::tf::Portfolio::CurrencySummary, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "USD Master" );
 
   m_pPortfolioGC
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
     "GC", "aoRay", "USD", ou::tf::Portfolio::Standard, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
 
   m_pPortfolioGCLongs
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
     "GCLong", "aoRay", "GC", ou::tf::Portfolio::Standard, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Longs" );
 
   m_pPortfolioGCShorts
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
     "GCShort", "aoRay", "GC", ou::tf::Portfolio::Standard, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Shorts" );
 
 //  m_pPortfolioShorts
-//    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+//    = ou::tf::PortfolioManager::GlobalInstance().ConstructPortfolio(
 //    "Shorts", "aoRay", "USD", ou::tf::Portfolio::Standard, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
 
 

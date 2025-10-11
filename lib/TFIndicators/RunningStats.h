@@ -17,53 +17,68 @@
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
+// RunningStats has no events
+//   CalcStats could be inherited, and called, then event processed in higher levels
+namespace linear {
+  struct Stats {
+    double b1; // slope
+    double b0; // offset
+    double meanY;
+    double rr;
+    double r;
+    double sd;
+    Stats(): b1 {}, b0 {}, meanY {}, rr {}, r {}, sd {} {}
+    Stats( const Stats& rhs )
+    : b1( rhs.b1 ), b0( rhs.b0 ), meanY( rhs.meanY ), rr( rhs.rr ), r( rhs.r ), sd( rhs.sd ) {}
+    void Reset() {
+      b1 = b0 = meanY = rr = r = sd = 0.0;
+    }
+  };
+}
+
 class RunningStats {
 public:
-  RunningStats(void);
-  RunningStats(double BBMultiplier);
-  virtual ~RunningStats(void);
-  void SetBBMultiplier( double dbl ) { m_BBMultiplier = dbl; };
-  double GetBBMultiplier( void ) const { return m_BBMultiplier; };
 
-  void Add( double, double );
-  void Remove( double, double );
-  virtual void CalcStats( void );
-  void Reset( void );
+  RunningStats();
+  RunningStats( double BBMultiplier );
+  RunningStats( const RunningStats& );
+  RunningStats( const RunningStats&& );
+  virtual ~RunningStats();
 
-//  double B2() const { return b2; }; // acceleration
-  double Slope( void ) const { return b1; }; // slope  B1  termios.h has this as #define
-  double Offset( void ) const { return b0; }; // offset B0
+  void SetBBMultiplier( double dbl ) { m_BBMultiplier = dbl; }
+  double GetBBMultiplier() const { return m_BBMultiplier; }
 
-  double MeanY( void ) const { return meanY; };
+  void Add( double x, double y );
+  void Remove( double x, double y );
+  virtual void CalcStats();
+  void CalcStats( linear::Stats& );
+  void Reset();
 
-  double RR( void ) const { return rr; };
-  double R( void ) const { return r; };
+  const linear::Stats& Get() const { return m_stats; }
 
-  double SD( void ) const { return sd; };
+  double Slope() const { return m_stats.b1; } // slope  B1  termios.h has this as #define
+  double Offset() const { return m_stats.b0; } // offset B0
 
-  double BBOffset( void ) const { return sd * m_BBMultiplier; };
-  double BBUpper( void ) const { return meanY + sd * m_BBMultiplier; };
-  double BBLower( void ) const { return  meanY - sd * m_BBMultiplier; };
+  double SumY() const { return m_SumY; }
+  double MeanY() const { return m_stats.meanY; }
+
+  double RR() const { return m_stats.rr; }
+  double R() const { return m_stats.r; }
+
+  double SD() const { return m_stats.sd; }
+
+  double BBOffset() const { return m_stats.sd * m_BBMultiplier; }
+  double BBUpper() const { return m_stats.meanY + m_stats.sd * m_BBMultiplier; }
+  double BBLower() const { return  m_stats.meanY - m_stats.sd * m_BBMultiplier; }
 
 protected:
-
-//  double b2; // acceleration
-  double b1; // slope
-  double b0; // offset
-
-  double meanY;
-
-  double rr;
-  double r;
-
-  double sd;
-
-//  double bbUpper, bbLower;
-
-  unsigned int nX, nY;
-  double SumXX, SumX, SumXY, SumY, SumYY;
-  double m_BBMultiplier;
 private:
+
+  linear::Stats m_stats;
+
+  unsigned int m_nX;
+  double m_SumXX, m_SumX, m_SumXY, m_SumY, m_SumYY;
+  double m_BBMultiplier;
 };
 
 } // namespace tf

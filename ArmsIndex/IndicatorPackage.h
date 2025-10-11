@@ -19,11 +19,7 @@
 
 #include <boost/lockfree/spsc_queue.hpp>
 
-#ifdef _M_X64
-#include <OUCharting/ChartDirector64/chartdir.h>
-#else
-#include <OUCharting/ChartDirector/chartdir.h>
-#endif
+#include <chartdir/chartdir.h>
 
 #include <OUCharting/ChartMaster.h>
 
@@ -36,27 +32,27 @@
 #include <TFIndicators/ZigZag.h>
 
 class IndicatorPackage {
-public: 
+public:
   typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
   typedef ou::tf::ProviderInterfaceBase::pProvider_t pProvider_t;
-  IndicatorPackage( 
+  IndicatorPackage(
      pProvider_t pDataProvider,
      pInstrument_t pInstIndex, pInstrument_t pInstTick, pInstrument_t pInstTrin
     );
-  ~IndicatorPackage(void);
+  ~IndicatorPackage();
 
-  void ToggleView( void );
+  void ToggleView();
 
   void SetChartDimensions( unsigned int x, unsigned int y );
-  void PopData( void );
-  void DrawCharts( void );
+  void PopData();
+  void DrawCharts();
 
   typedef FastDelegate1<const MemBlock&> OnDrawChart_t;
   void SetOnDrawChartIndex( OnDrawChart_t function ) { m_bdIndex.m_cb = function; }
   void SetOnDrawChartTick( OnDrawChart_t function ) { m_bdTicks.m_cb = function; }
   void SetOnDrawChartArms( OnDrawChart_t function ) { m_OnDrawChartArms = function; }
 
-  //void Start( void );
+  //void Start();
 protected:
 private:
 
@@ -103,7 +99,7 @@ private:
   struct ZZPair {
     double dblOfsIndx;
     double dblTrin;
-    ZZPair( void ): dblOfsIndx( 0.0 ), dblTrin( 0.0 ) {};
+    ZZPair(): dblOfsIndx( 0.0 ), dblTrin( 0.0 ) {};
     ZZPair( double dblOfsIndx_, double dblTrin_ ): dblOfsIndx( dblOfsIndx_ ), dblTrin( dblTrin_ ) {};
     ZZPair( const ZZPair& rhs ): dblOfsIndx( rhs.dblOfsIndx ), dblTrin( rhs.dblTrin ) {};
   };
@@ -123,12 +119,12 @@ private:
       m_vBarClose.push_back( bar.Close() );
       m_vBarLow.push_back( bar.Low() );
       boost::posix_time::ptime dt( bar.DateTime() );
-      m_vTime.push_back( 
-        Chart::chartTime( 
+      m_vTime.push_back(
+        Chart::chartTime(
           dt.date().year(), dt.date().month(), dt.date().day(),
           dt.time_of_day().hours(), dt.time_of_day().minutes(), dt.time_of_day().seconds() ) );
     }
-    void PopBack( void ) {
+    void PopBack() {
       m_vBarHigh.pop_back();
       m_vBarOpen.pop_back();
       m_vBarClose.pop_back();
@@ -138,14 +134,14 @@ private:
     void WorkingBar( const ou::tf::Bar& bar ) {
       m_barWorking = bar;
     }
-    void PushWorkingBar( void ) {
+    void PushWorkingBar() {
       PushBack( m_barWorking );
     }
-    DoubleArray High(void) { return DoubleArray( &m_vBarHigh.front(), m_vBarHigh.size() ); };
-    DoubleArray Open(void) { return DoubleArray( &m_vBarOpen.front(), m_vBarOpen.size() ); };
-    DoubleArray Close(void) { return DoubleArray( &m_vBarClose.front(), m_vBarClose.size() ); };
-    DoubleArray Low(void) { return DoubleArray( &m_vBarLow.front(), m_vBarLow.size() ); };
-    DoubleArray Time(void) { return DoubleArray( &m_vTime.front(), m_vTime.size() ); };
+    DoubleArray High() {  return DoubleArray( &m_vBarHigh.front(), m_vBarHigh.size() ); };
+    DoubleArray Open() {  return DoubleArray( &m_vBarOpen.front(), m_vBarOpen.size() ); };
+    DoubleArray Close() { return DoubleArray( &m_vBarClose.front(), m_vBarClose.size() ); };
+    DoubleArray Low() {   return DoubleArray( &m_vBarLow.front(), m_vBarLow.size() ); };
+    DoubleArray Time() {  return DoubleArray( &m_vTime.front(), m_vTime.size() ); };
   };
 
   BarDoubles m_bdIndex;
@@ -164,12 +160,12 @@ private:
 
   OnDrawChart_t m_OnDrawChartArms;
 
-  void PushZZPair( void );
+  void PushZZPair();
 
   void DrawChart( BarDoubles& bd, const std::string& sName );
-  void DrawChartIndex( void );
-  void DrawChartTick( void );
-  void DrawChartArms( void );
+  void DrawChartIndex();
+  void DrawChartTick();
+  void DrawChartArms();
 
   void HandleOnTrin( const ou::tf::Trade& trade );
   void HandleOnTick( const ou::tf::Trade& trade );

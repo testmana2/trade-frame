@@ -12,14 +12,26 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
+//#include "stdafx.h"
+
+#include <functional>
+
+#include <wx/textctrl.h>
+#include <wx/menu.h>
+
+#include <TFVuTrading/DragDropInstrumentTarget.h>
 
 #include "PanelPortfolioPosition_impl.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-PanelPortfolioPosition_impl::PanelPortfolioPosition_impl( PanelPortfolioPosition& ppp ): m_ppp( ppp ) {
+PanelPortfolioPosition_impl::PanelPortfolioPosition_impl( PanelPortfolioPosition& ppp )
+:
+  m_ppp( ppp )
+{
+
+  //std::cout << "PanelPortfolioPosition_impl construct" << std::endl;
 
   m_bDialogActive = false;
 
@@ -38,17 +50,18 @@ PanelPortfolioPosition_impl::PanelPortfolioPosition_impl( PanelPortfolioPosition
     m_menuGridLabelPositionPopUp = NULL;
     m_menuGridCellPositionPopUp = NULL;
 
-    m_pdialogInstrumentSelect = 0;
+    //m_pdialogInstrumentSelect = 0;
     m_pdialogSimpleOneLineOrder = 0;
 
     m_nRowRightClick = -1;
 
 }
 
-PanelPortfolioPosition_impl::~PanelPortfolioPosition_impl( void ) {
+PanelPortfolioPosition_impl::~PanelPortfolioPosition_impl() {
+  //std::cout << "PanelPortfolioPosition_impl destruct" << std::endl;
 }
 
-void PanelPortfolioPosition_impl::CreateControls() {    
+void PanelPortfolioPosition_impl::CreateControls() {
 
     PanelPortfolioPosition* itemPanel1 = &m_ppp;
 
@@ -113,19 +126,17 @@ void PanelPortfolioPosition_impl::CreateControls() {
     m_gridPositions->SetDefaultRowSize(22);
     m_gridPositions->SetColLabelSize(22);
     m_gridPositions->SetRowLabelSize(0);
-    //m_sizerMain->Add(m_gridPositions, 1, wxGROW|wxLEFT|wxRIGHT|wxBOTTOM|wxADJUST_MINSIZE, 2);
+    //m_sizerMain->Add(m_gridPositions, 1, wxGROW|wxLEFT|wxRIGHT|wxBOTTOM, 2);
     m_sizerMain->Add(m_gridPositions, 1, wxGROW|wxLEFT|wxRIGHT|wxBOTTOM, 2);
 
   m_gridPositions->CreateGrid(0, GRID_ARRAY_COL_COUNT, wxGrid::wxGridSelectCells);
 
-    //m_sizerMain->Add(m_gridPositions, 1, wxGROW|wxALIGN_LEFT|wxALL|wxEXPAND, 2);
+    //m_sizerMain->Add(m_gridPositions, 1, wxALL|wxEXPAND, 2);
     //m_gridPositions->CreateGrid(0, GRID_POSITION_ARRAY_COL_COUNT, wxGrid::wxGridSelectCells);
     //m_gridPositions = new wxGrid( itemPanel1, ID_GridPositions, wxDefaultPosition, wxSize(-1, 22 * 4), wxFULL_REPAINT_ON_RESIZE|wxHSCROLL|wxVSCROLL );  // wxSUNKEN_BORDER|
 
   int ix( 0 );
   BOOST_PP_REPEAT( BOOST_PP_ARRAY_SIZE( GRID_ARRAY ), GRID_EMIT_SetColSettings, ix )
-
-  m_ppp.Bind( wxEVT_CLOSE_WINDOW, &PanelPortfolioPosition_impl::OnClose, this );  // start close of windows and controls
 
   m_menuGridLabelPositionPopUp = new wxMenu;
   m_menuGridLabelPositionPopUp->Append( m_ppp.ID_MenuAddPosition, "Add Position" );
@@ -139,9 +150,23 @@ void PanelPortfolioPosition_impl::CreateControls() {
   m_menuGridCellPositionPopUp->Append( m_ppp.ID_MenuClosePosition, "Close Position" );
   m_menuGridCellPositionPopUp->Append( m_ppp.ID_MenuAddPortfolio, "Add Portfolio" );
   m_menuGridCellPositionPopUp->Append( m_ppp.ID_MenuClosePortfolio, "Close Portfolio" );
-  
+
+  DragDropInstrumentTarget* pddDataInstrumentTarget = new DragDropInstrumentTarget( new DragDropInstrument( DragDropInstrument::fOnOptionUnderlyingRetrieveInitiate_t() ) );
+
+  pddDataInstrumentTarget->m_fOnOptionUnderlyingRetrieveComplete = [this]( pInstrument_t pOptionInstrument, pInstrument_t pUnderlyingInstrument ) {
+    //std::cout << "symbol name: " << pInstrument->GetInstrumentName() << std::endl;
+    AddInstrumentToPosition( pOptionInstrument );
+  };
+  //if ( nullptr != m_ddDataInstrumentTarget.m_fOnInstrumentRetrieveInitiate ) {
+  //  m_ddDataInstrumentTarget.m_fOnInstrumentRetrieveInitiate( [](pInstrument_t pInstrument){
+  //    std::cout << "symbol name: " << pInstrument->GetInstrumentName() << std::endl;
+  //  });
+  //}
+  m_ppp.SetDropTarget( pddDataInstrumentTarget ); // wxDropTarget takes possession
+
   m_ppp.Bind( wxEVT_GRID_LABEL_RIGHT_CLICK, &PanelPortfolioPosition_impl::OnRightClickGridLabel, this ); // add in object for each row, column, cell?
   m_ppp.Bind( wxEVT_GRID_CELL_RIGHT_CLICK,  &PanelPortfolioPosition_impl::OnRightClickGridCell, this ); // add in object for each row, column, cell?
+  m_ppp.Bind( wxEVT_GRID_COL_SIZE,          &PanelPortfolioPosition_impl::OnGridColSize, this );
   m_ppp.Bind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddPosition, this, m_ppp.ID_MenuAddPosition, -1, 0 );
   m_ppp.Bind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddOrder, this, m_ppp.ID_MenuAddOrder, -1, 0 );
   m_ppp.Bind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpCancelOrders, this, m_ppp.ID_MenuCancelOrders, -1, 0 );
@@ -149,8 +174,43 @@ void PanelPortfolioPosition_impl::CreateControls() {
   m_ppp.Bind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddPortfolio, this, m_ppp.ID_MenuAddPortfolio, -1, 0 );
   m_ppp.Bind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpClosePortfolio, this, m_ppp.ID_MenuClosePortfolio, -1, 0 );
 
+  m_ppp.Bind( wxEVT_DESTROY, &PanelPortfolioPosition_impl::HandleWindowDestroy, this );
+
   m_vPortfolioValues.resize( 4 );
 
+}
+
+void PanelPortfolioPosition_impl::HandleWindowDestroy( wxWindowDestroyEvent& event ) {
+
+  m_ppp.SetDropTarget( nullptr );
+
+  if ( nullptr != m_menuGridLabelPositionPopUp ) {
+    delete m_menuGridLabelPositionPopUp;
+    m_menuGridLabelPositionPopUp = nullptr;
+  }
+
+  if ( nullptr != m_menuGridCellPositionPopUp ) {
+    delete m_menuGridCellPositionPopUp;
+    m_menuGridCellPositionPopUp = nullptr;
+  }
+
+  // Exit Steps: #2 -> FrameMain::OnClose
+//  if ( 0 != OnPanelClosing ) OnPanelClosing();
+  // event.Veto();  // possible call, if needed
+  // event.CanVeto(); // if not a
+  //event.Skip();  // auto followed by Destroy();
+
+  m_ppp.Unbind( wxEVT_GRID_LABEL_RIGHT_CLICK, &PanelPortfolioPosition_impl::OnRightClickGridLabel, this ); // add in object for each row, column, cell?
+  m_ppp.Unbind( wxEVT_GRID_CELL_RIGHT_CLICK,  &PanelPortfolioPosition_impl::OnRightClickGridCell, this ); // add in object for each row, column, cell?
+  m_ppp.Unbind( wxEVT_GRID_COL_SIZE,          &PanelPortfolioPosition_impl::OnGridColSize, this );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddPosition, this, m_ppp.ID_MenuAddPosition, -1, 0 );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddOrder, this, m_ppp.ID_MenuAddOrder, -1, 0 );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpCancelOrders, this, m_ppp.ID_MenuCancelOrders, -1, 0 );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpClosePosition, this, m_ppp.ID_MenuClosePosition, -1, 0 );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpAddPortfolio, this, m_ppp.ID_MenuAddPortfolio, -1, 0 );
+  m_ppp.Unbind( wxEVT_COMMAND_MENU_SELECTED,  &PanelPortfolioPosition_impl::OnPositionPopUpClosePortfolio, this, m_ppp.ID_MenuClosePortfolio, -1, 0 );
+
+  m_ppp.Unbind( wxEVT_DESTROY, &PanelPortfolioPosition_impl::HandleWindowDestroy, this );
 }
 
 void PanelPortfolioPosition_impl::SetPortfolio( pPortfolio_t pPortfolio ) {
@@ -171,13 +231,21 @@ void PanelPortfolioPosition_impl::SetPortfolio( pPortfolio_t pPortfolio ) {
     m_gridPositions->Enable( false );
 //    m_sizerMain->Layout();
     //m_gridPositions->Destroy();
-    
+
 //  m_ppp.SetAutoLayout( true );
 //  m_ppp.Layout();
 //  wxSize size = m_ppp.GetSize();
 //  size.x += 10;
 //  m_ppp.SetSize( size );
   }
+}
+
+void PanelPortfolioPosition_impl::SaveColumnSizes( ou::tf::GridColumnSizer& gcs ) const {
+  gcs.SaveColumnSizes( *m_gridPositions );
+}
+
+void PanelPortfolioPosition_impl::SetColumnSizes( ou::tf::GridColumnSizer& gcs ) {
+  gcs.SetColumnSizes( *m_gridPositions );
 }
 
 void PanelPortfolioPosition_impl::HandleOnUnRealizedPLUpdate( const Portfolio& ) {
@@ -198,16 +266,26 @@ void PanelPortfolioPosition_impl::OnRightClickGridCell( wxGridEvent& event ) {
   m_ppp.PopupMenu( m_menuGridCellPositionPopUp );
 }
 
-void PanelPortfolioPosition_impl::OnPositionPopUpAddPosition( wxCommandEvent& event ) {
-  std::cout << "add position" << std::endl;
-  if ( !m_bDialogActive ) {
-    m_bDialogActive = true;
-    m_pdialogInstrumentSelect = new ou::tf::DialogInstrumentSelect( &m_ppp );
-    m_pdialogInstrumentSelect->SetDataExchange( &m_DialogInstrumentSelect_DataExchange );
-    m_pdialogInstrumentSelect->SetOnDoneHandler( MakeDelegate( this, &PanelPortfolioPosition_impl::OnDialogInstrumentSelectDone ) );
-    m_pdialogInstrumentSelect->Show( true );
+void PanelPortfolioPosition_impl::OnGridColSize( wxGridSizeEvent& event ) {
+  if ( nullptr != m_ppp.m_fColumnWidthChanged ) {
+    m_ppp.m_fColumnWidthChanged( event.GetRowOrCol(), m_gridPositions->GetColSize( event.GetRowOrCol() ), m_ppp );
   }
 }
+
+//void PanelPortfolioPosition_impl::OnDialogInstrumentSelectDone( ou::tf::DialogBase::DataExchange* ) {
+//  m_pdialogInstrumentSelect->SetOnDoneHandler( 0 );
+//  m_pdialogInstrumentSelect->SetDataExchange( 0 );
+//  if ( m_DialogInstrumentSelect_DataExchange.bOk ) {
+//    std::cout << "Requested symbol: " << m_DialogInstrumentSelect_DataExchange.sSymbolName << std::endl;
+//    std::string s( m_DialogInstrumentSelect_DataExchange.sSymbolName );
+//    if ( 0 != m_delegateConstructPosition ) {
+//      m_delegateConstructPosition( s, m_pPortfolio, MakeDelegate( this, &PanelPortfolioPosition_impl::AddPosition ) );
+//    }
+//  }
+//  m_pdialogInstrumentSelect->Destroy();
+//  m_pdialogInstrumentSelect = 0;
+//  m_bDialogActive = false;
+//}
 
 void PanelPortfolioPosition_impl::OnPositionPopUpAddOrder( wxCommandEvent& event ) {
   std::cout << "add order" << std::endl;
@@ -248,43 +326,23 @@ void PanelPortfolioPosition_impl::OnPositionPopUpClosePortfolio( wxCommandEvent&
 void PanelPortfolioPosition_impl::OnDialogNewPortfolioDone( ou::tf::DialogBase::DataExchange* ) {
   m_pdialogNewPortfolio->SetOnDoneHandler( 0 );
   m_pdialogNewPortfolio->SetDataExchange( 0 );
-  delete m_pdialogNewPortfolio;
-  m_pdialogNewPortfolio = 0;
-  m_bDialogActive = false;
   if ( m_DialogNewPortfolio_DataExchange.bOk ) {
-    if ( 0 != m_delegateConstructPortfolio ) {
+    if ( nullptr != m_ppp.m_fConstructPortfolio ) {
       std::string sPortfolioId( m_DialogNewPortfolio_DataExchange.sPortfolioId );
       std::string sDescription( m_DialogNewPortfolio_DataExchange.sDescription );
-      m_delegateConstructPortfolio( m_ppp, sPortfolioId, sDescription );
+      m_ppp.m_fConstructPortfolio( m_ppp, sPortfolioId, sDescription );
     }
   }
-}
-
-void PanelPortfolioPosition_impl::OnDialogInstrumentSelectDone( ou::tf::DialogBase::DataExchange* ) {
-  m_pdialogInstrumentSelect->SetOnDoneHandler( 0 );
-  m_pdialogInstrumentSelect->SetDataExchange( 0 );
-  delete m_pdialogInstrumentSelect;
-  m_pdialogInstrumentSelect = 0;
+  m_pdialogNewPortfolio->Destroy();
+  m_pdialogNewPortfolio = 0;
   m_bDialogActive = false;
-  if ( m_DialogInstrumentSelect_DataExchange.bOk ) {
-    std::cout << "Requested symbol: " << m_DialogInstrumentSelect_DataExchange.sSymbolName << std::endl;
-    std::string s( m_DialogInstrumentSelect_DataExchange.sSymbolName );
-    if ( 0 != m_delegateConstructPosition ) {
-      m_delegateConstructPosition( s, m_pPortfolio, MakeDelegate( this, &PanelPortfolioPosition_impl::AddPosition ) ); 
-    }
-  }
 }
 
 void PanelPortfolioPosition_impl::OnDialogSimpleOneLineOrderDone( ou::tf::DialogBase::DataExchange* ) {
-  m_pdialogSimpleOneLineOrder->SetOnDoneHandler( 0 );
-  m_pdialogSimpleOneLineOrder->SetDataExchange( 0 );
-  delete m_pdialogSimpleOneLineOrder;
-  m_pdialogSimpleOneLineOrder = 0;
-  m_bDialogActive = false;
   if ( m_DialogSimpleOneLineOrder_DataExchange.bOk ) {
     // compose order and send it off
     // need to know for which position the order is meant
-    ou::tf::OrderSide::enumOrderSide eOrderSide;
+    ou::tf::OrderSide::EOrderSide eOrderSide;
 //    ou::tf::OrderType::enumOrderType eOrderType;
     pPosition_t pPosition( m_vPositions[ m_nRowRightClick ].GetPosition() );
     bool bOk( true );
@@ -332,6 +390,35 @@ void PanelPortfolioPosition_impl::OnDialogSimpleOneLineOrderDone( ou::tf::Dialog
       }
     }
   }
+  m_pdialogSimpleOneLineOrder->SetOnDoneHandler( 0 );
+  m_pdialogSimpleOneLineOrder->SetDataExchange( 0 );
+  m_pdialogSimpleOneLineOrder->Destroy();
+  m_pdialogSimpleOneLineOrder = 0;
+  m_bDialogActive = false;
+}
+
+void PanelPortfolioPosition_impl::OnPositionPopUpAddPosition( wxCommandEvent& event ) {
+  if ( nullptr != m_ppp.m_fSelectInstrument ) {
+    pInstrument_t pInstrument = m_ppp.m_fSelectInstrument();
+    if ( 0 != pInstrument.use_count() ) {
+      AddInstrumentToPosition( pInstrument );
+    }
+  }
+  else {
+    std::cout << "PanelPortfolioPosition_impl::OnPositionPopUpAddPosition: no fSelectInstrument" << std::endl;
+  }
+}
+
+//
+void PanelPortfolioPosition_impl::AddInstrumentToPosition( pInstrument_t pInstrument ) {
+  if ( nullptr != m_ppp.m_fConstructPosition) {
+    namespace ph = std::placeholders;
+    m_ppp.m_fConstructPosition( pInstrument, m_pPortfolio,
+      std::bind( &PanelPortfolioPosition_impl::AddPosition, this, ph::_1 ) );
+  }
+  else {
+    std::cout << "PanelPortfolioPosition_impl::AddInstrumentToPosition: no m_fConstructPosition" << std::endl;
+  }
 }
 
 void PanelPortfolioPosition_impl::AddPosition( pPosition_t pPosition ) {
@@ -340,7 +427,7 @@ void PanelPortfolioPosition_impl::AddPosition( pPosition_t pPosition ) {
 
   int row( m_vPositions.size() );
 
-  m_vPositions.push_back( structPosition( pPosition, m_gridPositions, row ) );
+  m_vPositions.push_back( structPosition( pPosition, *m_gridPositions, row ) );
 
   UpdateGui();
 }
@@ -367,32 +454,12 @@ void PanelPortfolioPosition_impl::UpdateGui( void ) {
   m_vPortfolioValues[ 3 ].SetValue( dblTotal );
   if ( m_vPortfolioValues[ 3 ].Changed() ) m_txtTotal       ->SetValue( m_vPortfolioValues[ 3 ].GetText() );
   /*
-  m_pPanelPortfolioStats->SetStats( 
+  m_pPanelPortfolioStats->SetStats(
     boost::lexical_cast<std::string>( m_dblMinPL ),
     boost::lexical_cast<std::string>( dblCurrent ),
     boost::lexical_cast<std::string>( m_dblMaxPL )
     );
     */
-}
-
-void PanelPortfolioPosition_impl::OnClose( wxCloseEvent& event ) {
-
-  // todo:  don't close if dialog is still open.
-
-  if ( 0 != m_menuGridLabelPositionPopUp ) {
-    delete m_menuGridLabelPositionPopUp;
-  }
-
-  if ( 0 != m_menuGridCellPositionPopUp ) {
-    delete m_menuGridCellPositionPopUp;
-  }
-
-  // Exit Steps: #2 -> FrameMain::OnClose
-//  if ( 0 != OnPanelClosing ) OnPanelClosing();
-  // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
-  event.Skip();  // auto followed by Destroy();
-
 }
 
 } // namespace tf

@@ -13,6 +13,9 @@
 
 #include <algorithm>
 
+#include <boost/log/trivial.hpp>
+#include <boost/date_time/posix_time/posix_time_io.hpp>
+
 #include "ChartEntryBase.h"
 
 namespace ou { // One Unified
@@ -21,139 +24,235 @@ namespace ou { // One Unified
 // ChartEntryBase
 //
 
-ChartEntryBase::ChartEntryBase(): m_ixStart( 0 ), m_nElements( 0 ), m_bUseThreadSafety( false ) {
+ChartEntryBase::ChartEntryBase()
+: m_ixStart( 0 ), m_nElements( 0 ), m_eColour( ou::Colour::Black ) {
 }
 
-ChartEntryBase::ChartEntryBase( size_type nSize ) 
-: m_eColour( ou::Colour::Black )
+ChartEntryBase::ChartEntryBase( const ChartEntryBase& rhs )
+: m_ixStart( rhs.m_ixStart ), m_nElements( rhs.m_nElements ), m_eColour( rhs.m_eColour )
+, m_sName( rhs.m_sName )
 {
-  m_vPrice.reserve( nSize );
+}
+
+ChartEntryBase::ChartEntryBase( ChartEntryBase&& rhs )
+: m_ixStart( rhs.m_ixStart ), m_nElements( rhs.m_nElements ), m_eColour( rhs.m_eColour )
+, m_sName( std::move( rhs.m_sName ) )
+{
 }
 
 ChartEntryBase::~ChartEntryBase() {
-  m_vPrice.clear();
-}
-
-void ChartEntryBase::Reserve( size_type nSize ) {
-  m_vPrice.reserve( nSize );
-}
-
-void ChartEntryBase::Append(double price) {
-  m_vPrice.push_back( price );
-}
-
-void ChartEntryBase::Clear( void ) {
-  m_vPrice.clear();
-  m_ixStart = 0;
-  m_nElements = 0;
 }
 
 //
-// ChartEntryBaseWithTime
+// ChartEntryTime
 //
 
-ChartEntryBaseWithTime::ChartEntryBaseWithTime() : 
-  ChartEntryBase(),
-    m_dtViewPortBegin( boost::posix_time::not_a_date_time ), m_dtViewPortEnd( boost::posix_time::not_a_date_time )
+ChartEntryTime::ChartEntryTime() :
+  ChartEntryBase()
 {
-  m_plfTimeDouble = new lfTimeDouble_t;
 }
 
-ChartEntryBaseWithTime::ChartEntryBaseWithTime( size_type nSize )
-: ChartEntryBase( nSize ), 
-    m_dtViewPortBegin( boost::posix_time::not_a_date_time ), m_dtViewPortEnd( boost::posix_time::not_a_date_time )
+//ChartEntryTime::ChartEntryTime( size_type nSize )
+//: ChartEntryBase( nSize ),
+//    m_dtViewPortBegin( boost::posix_time::not_a_date_time ), m_dtViewPortEnd( boost::posix_time::not_a_date_time )
+//{
+//  m_bufferedDateTime.Reserve( nSize );
+//  m_vChartTime.reserve( nSize );
+//  ChartEntryBase::Reserve( nSize );
+//}
+
+//ChartEntryBaseWithTime::ChartEntryBaseWithTime( const ChartEntryBaseWithTime& rhs ) :
+//  ChartEntryBase( rhs ),
+//    m_dtViewPortBegin( rhs.m_dtViewPortBegin ), m_dtViewPortEnd( rhs.m_dtViewPortEnd ),
+//    m_vDateTime( rhs.m_vDateTime ), m_vChartTime( rhs.m_vChartTime )
+//{
+//  m_plfTimeDouble = new lfTimeDouble_t;
+//}
+
+ChartEntryTime::~ChartEntryTime() {
+  ClearQueue(); // run the overrides
+  Clear(); // run the overrides
+}
+
+ChartEntryTime::ChartEntryTime( ChartEntryTime&& rhs )
+: ChartEntryBase( std::move( rhs ) )
+, m_rangeViewPort( std::move( rhs.m_rangeViewPort ) )
+, m_vDateTime( std::move( rhs.m_vDateTime ) )
+, m_vChartTime( std::move( rhs.m_vChartTime ) )
+, m_queue( std::move( rhs.m_queue ) )
 {
-  m_plfTimeDouble = new lfTimeDouble_t;
-  m_vDateTime.reserve( nSize );
-  m_vChartTime.reserve( nSize );
-  ChartEntryBase::Reserve( nSize );
 }
 
-ChartEntryBaseWithTime::ChartEntryBaseWithTime( const ChartEntryBaseWithTime& rhs ) : 
-  ChartEntryBase( rhs ),
-    m_dtViewPortBegin( rhs.m_dtViewPortBegin ), m_dtViewPortEnd( rhs.m_dtViewPortEnd ),
-    m_vDateTime( rhs.m_vDateTime ), m_vChartTime( rhs.m_vChartTime )
-{
-  m_plfTimeDouble = new lfTimeDouble_t;
-}
-
-ChartEntryBaseWithTime::~ChartEntryBaseWithTime() {
-  delete m_plfTimeDouble;
-  m_vDateTime.clear();
-  m_vChartTime.clear();
-}
-
-void ChartEntryBaseWithTime::Reserve( size_type nSize ) {
-  ChartEntryBase::Reserve( nSize );
+void ChartEntryTime::Reserve( size_type nSize ) {
   m_vDateTime.reserve( nSize );
   m_vChartTime.reserve( nSize );
 }
 
-void ChartEntryBaseWithTime::SetViewPort( boost::posix_time::ptime dtBegin, boost::posix_time::ptime dtEnd ) {
-  // record the viewport
-  m_dtViewPortBegin = dtBegin;
-  m_dtViewPortEnd = dtEnd;
-  // initialize viewport values
-  m_ixStart = 0;
-  m_nElements = 0;
-  // calculate new viewport values
-  // todo: what happens when nothing is within the range, should hae zero elements listed
-  if ( 0 != m_vDateTime.size() ) {
-    vDateTime_t::iterator iterBegin( m_vDateTime.begin() );
-    vDateTime_t::iterator iterEnd( m_vDateTime.end() );
+void ChartEntryTime::Append( boost::posix_time::ptime dt ) {
+  m_queue.Append( dt );
+}
 
-    if ( boost::posix_time::not_a_date_time != dtBegin ) {
-      iterBegin = std::lower_bound( m_vDateTime.begin(), m_vDateTime.end(), dtBegin );
+double ChartEntryTime::Convert( boost::posix_time::ptime dt ) {
+
+  const boost::gregorian::date date = dt.date();
+  const boost::posix_time::time_duration time = dt.time_of_day();
+
+  static const double divisor( time.ticks_per_second() );
+  double dfrac = time.fractional_seconds();
+  dfrac /= divisor;
+  const double converted = Chart::chartTime(
+      date.year(), date.month(), date.day(),
+      time.hours(), time.minutes(), time.seconds() )
+      + dfrac
+    ;
+  return converted;
+}
+
+// runs in thread of main?  What does this do?
+void ChartEntryTime::AppendFg( boost::posix_time::ptime dt ) {
+
+  bool bOk( true );
+
+  // this is maybe done on the fly and not correct here.
+  // lotsa extra stuff to track random breakage
+  // end result, pOrder generation using non-available quote for datetime source
+  try {
+
+    if ( boost::posix_time::special_values::not_a_date_time == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg not a date time?";
+      bOk = false;
     }
-    if ( m_vDateTime.end() != iterBegin ) {
-      if ( boost::posix_time::not_a_date_time != dtEnd ) {
-        iterEnd = std::upper_bound( iterBegin, m_vDateTime.end(), dtEnd );
+
+    if ( boost::posix_time::special_values::max_date_time == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg max date time?";
+      bOk = false;
+    }
+
+    if ( boost::posix_time::special_values::min_date_time == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg min date time?";
+      bOk = false;
+    }
+
+    if ( boost::posix_time::special_values::neg_infin == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg neg infin date time?";
+      bOk = false;
+    }
+
+    if ( boost::posix_time::special_values::pos_infin == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg pos infin date time?";
+      bOk = false;
+    }
+
+    if ( boost::posix_time::special_values::not_special == dt ) {
+      BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg not special";
+      bOk = false;
+    }
+
+    if ( bOk ) {
+      //BOOST_LOG_TRIVIAL(debug) << m_sName << dt;
+
+      const double converted( Convert( dt ) );
+
+      // do these go in with IncCntElements instead?
+      assert( boost::posix_time::not_a_date_time!= dt );  // validate for TODO below
+      m_vDateTime.push_back( dt );
+      m_vChartTime.push_back( converted );
+
+      if ( ( boost::posix_time::not_a_date_time != m_rangeViewPort.dtEnd ) && ( dt > m_rangeViewPort.dtEnd ) ) {
+        // don't append any more values to visible area
       }
-      m_ixStart = iterBegin - m_vDateTime.begin();
-      m_nElements = iterEnd - iterBegin;
+      else {
+        IncCntElements();
+      }
+    }
+
+  }
+  catch(...) {
+    BOOST_LOG_TRIVIAL(debug) << m_sName << " ChartEntryTime::AppendFg catch (bad datetime)";
+  }
+}
+
+// called from WinChartView::ThreadDrawChart1 -> ChartDataView::SetViewPort
+void ChartEntryTime::SetViewPort( boost::posix_time::ptime dtBegin, boost::posix_time::ptime dtEnd ) {
+  SetViewPort( range_t( dtBegin, dtEnd ) );
+}
+
+void ChartEntryTime::SetViewPort( const range_t& range ) {
+
+  // record the viewport
+  m_rangeViewPort = range;
+
+  // initialize viewport values
+  SetIxStart( 0 );
+  SetCntElements( 0 );
+
+  // calculate new viewport values
+  // todo: what happens when nothing is within the range, should have zero elements listed
+
+  // should this be here or not?
+  //ClearQueue();  // should this be here?
+
+  // TODO: why would there be not_a_date_time in the vector?
+  //   need to test for insertions like this?
+  if ( 0 != m_vDateTime.size() ) {
+
+    vDateTime_t::const_iterator citerBegin( m_vDateTime.begin() );
+    vDateTime_t::const_iterator citerEnd( m_vDateTime.end() );
+    //const auto diff( citerEnd - citerBegin ); // created for diagnostic use
+
+    if ( boost::posix_time::not_a_date_time != m_rangeViewPort.dtBegin ) {
+      citerBegin = std::lower_bound( m_vDateTime.begin(), m_vDateTime.end(), m_rangeViewPort.dtBegin );
+    }
+
+    if ( m_vDateTime.end() != citerBegin ) {
+      if ( boost::posix_time::not_a_date_time != m_rangeViewPort.dtEnd ) {
+        citerEnd = std::upper_bound( citerBegin, m_vDateTime.cend(), m_rangeViewPort.dtEnd );
+      }
+    }
+
+    SetIxStart( citerBegin - m_vDateTime.begin() );
+    SetCntElements( citerEnd - citerBegin );
+
+    if ( m_vDateTime.end() == citerBegin ) {
+      //std::stringstream ssbegin;
+      //ssbegin << range.dtBegin << "," << range.dtEnd;
+      //std::string sbegin = ssbegin.str();
+      //iterBegin = m_vDateTime.begin();
+      //iterEnd = m_vDateTime.end();
+      //SetIxStart( iterBegin - m_vDateTime.begin() );
+      //SetCntElements( iterEnd - iterBegin );
     }
   }
 }
 
-void ChartEntryBaseWithTime::Append( boost::posix_time::ptime dt) {
-  // some Chart Entries don't use the built in vector
-  m_vDateTime.push_back( dt );
-  m_vChartTime.push_back( 
-    Chart::chartTime( 
-      dt.date().year(), dt.date().month(), dt.date().day(),
-      dt.time_of_day().hours(), dt.time_of_day().minutes(), dt.time_of_day().seconds() ) );
-
-  if ( ( boost::posix_time::not_a_date_time != m_dtViewPortEnd ) && ( dt > m_dtViewPortEnd ) ) {
-    // don't append any more values to visible area
+ChartEntryTime::range_t ChartEntryTime::GetExtents() const {
+  if ( 0 == m_vDateTime.size() ) {
+    return range_t( boost::posix_time::not_a_date_time, boost::posix_time::not_a_date_time );
   }
   else {
-    ++m_nElements;
+    return range_t( m_vDateTime.front(), m_vDateTime.back() );
   }
 }
 
-void ChartEntryBaseWithTime::Append( boost::posix_time::ptime dt, double price) {
-  if ( m_bUseThreadSafety ) {
-    while ( !m_plfTimeDouble->push( TimeDouble_t( dt, price ) ) ) {};  // add error condition here
-  }
-  else {
-    ChartEntryBase::Append( price );
-    Append( dt );
-  }
+boost::posix_time::ptime ChartEntryTime::GetExtentBegin() const {
+  return 0 == m_vDateTime.size() ? boost::posix_time::not_a_date_time : m_vDateTime.front();
+}
+
+boost::posix_time::ptime ChartEntryTime::GetExtentEnd() const {
+  return 0 == m_vDateTime.size() ? boost::posix_time::not_a_date_time : m_vDateTime.back();
 }
 
 // there are out-of-order issues or loss-of-data issues if m_bUseThreadSafety is changed while something is in the Queue
-void ChartEntryBaseWithTime::ClearQueue( void ) {  
-  TimeDouble_t td;
-  while ( m_plfTimeDouble->pop( td ) ) {
-    ChartEntryBase::Append( td.m_price );
-    Append( td.m_dt );
-  };
+void ChartEntryTime::ClearQueue() {
+  namespace args = std::placeholders;
+  m_queue.Sync( std::bind( &ChartEntryTime::AppendFg, this, args::_1 ) );
 }
 
-void ChartEntryBaseWithTime::Clear( void ) {
+void ChartEntryTime::Clear() {
+  //ChartEntryBase::Clear();
   m_vDateTime.clear();
   m_vChartTime.clear();
-  ChartEntryBase::Clear();
+  //ChartEntryBase::Clear();
 }
 
 } // namespace ou

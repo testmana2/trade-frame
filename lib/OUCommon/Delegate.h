@@ -13,12 +13,15 @@
 
 #pragma once
 
+#include <atomic>
 #include <vector>
 
-#include <boost/atomic.hpp>
+//#include <boost/atomic.hpp>
 #include <boost/scope_exit.hpp>
 
 #include <OUCommon/SpinLock.h>
+
+// 2018/07/22 TODO: change the vector manipulation to std::move?
 
 // 2014/09/30 something to verify with existing code
 // http://preshing.com/20140709/the-purpose-of-memory_order_consume-in-cpp11/
@@ -29,9 +32,9 @@ using namespace fastdelegate;
 
 namespace ou {
 
-template<typename T>  // T: object used in operator(), normally const& 
+template<typename T>  // T: object used in operator(), normally const&
 class Delegate {
-// Example:  
+// Example:
 //   Declaration:
 //     Delegate<double> OnValueChanged;
 //   Add delegate:
@@ -42,13 +45,14 @@ class Delegate {
 //    OnValueChanged.Remove( MakeDelegate( this, &MyClass::HandleValueChanged ) );
 public:
 
-  typedef fastdelegate::FastDelegate1<T> OnDispatchHandler;
-  typedef std::vector<OnDispatchHandler> vDispatch_t;
-  typedef typename vDispatch_t::size_type vsize_t;
+  using OnDispatchHandler = fastdelegate::FastDelegate1<T>;
+  using vDispatch_t = std::vector<OnDispatchHandler>;
+  using vsize_t = typename vDispatch_t::size_type;
 
-  Delegate( void );
+  Delegate();
   Delegate( const Delegate& );
-  ~Delegate( void );
+  Delegate( Delegate&& ); // used during initial emplace only
+  ~Delegate();
 
   void operator()( T );
 
@@ -56,34 +60,34 @@ public:
   void Remove( OnDispatchHandler function );
 
   bool IsEmpty() const { return ( 0 == m_vDispatchMaster.size() ); };
-  vsize_t Size( void ) const { return m_vDispatchMaster.size(); };
+  vsize_t Size() const { return m_vDispatchMaster.size(); };
 
 protected:
 private:
 
-  typedef typename vDispatch_t::const_iterator const_iterator;
+  using const_iterator = typename vDispatch_t::const_iterator;
 
-  boost::atomic<int> m_cntDispatchProcesses;
-  boost::atomic<int> m_cntChanges;
+  std::atomic<int> m_cntDispatchProcesses;
+  std::atomic<int> m_cntChanges;
   ou::SpinLock m_spinlockVectorUpdate;   // lock against Add/Remove
   ou::SpinLock m_spinlockVectorReplace;  // lock against operator()
 
-  vDispatch_t m_vDispatchMaster;  // master vector used for Add/Remove   
+  vDispatch_t m_vDispatchMaster;  // master vector used for Add/Remove
   vDispatch_t m_vDispatch;  // used by operator() for dispatch, copied from m_vDispatchMaster
 
-  void VectorReplace( void );  // handles the copy of m_vDispatchMaster to m_vDispatch
+  void VectorReplace();  // handles the copy of m_vDispatchMaster to m_vDispatch
 
 };
 
-template<class T> 
-Delegate<T>::Delegate(void) 
-  : m_cntDispatchProcesses( 0 ), m_cntChanges( 0 )
+template<class T>
+Delegate<T>::Delegate()
+  : m_cntDispatchProcesses {}, m_cntChanges {}
 {
 }
 
 template<class T>
-Delegate<T>::Delegate( const Delegate<T>& rhs ) 
-  : m_cntDispatchProcesses( 0 ), m_cntChanges( 0 )
+Delegate<T>::Delegate( const Delegate<T>& rhs )
+  : m_cntDispatchProcesses {}, m_cntChanges {}
   // don't carry over any of the stuff, just re-initialize it.
   // boost::atomic is non-copyable
 //  : m_cntDispatchProcesses( rhs.m_cntDispatchProcesses ), m_cntChanges( rhs.m_cntChanges ),
@@ -95,31 +99,41 @@ Delegate<T>::Delegate( const Delegate<T>& rhs )
 }
 
 template<class T>
-Delegate<T>::~Delegate(void) {
+Delegate<T>::Delegate( Delegate<T>&& rhs )
+: m_cntDispatchProcesses {}, m_cntChanges {}
+{
+  assert( 0 == rhs.m_cntChanges );
+  assert( 0 == rhs.m_cntDispatchProcesses );
+  assert( 0 == rhs.m_vDispatch.size() );
+  assert( 0 == rhs.m_vDispatchMaster.size() );
+}
+
+template<class T>
+Delegate<T>::~Delegate() {
   // this object should be deleted in same thread in which it was created
 //  int n = m_cntDispatchProcesses.load( boost::memory_order_acquire );
 //  if ( 10 < n ) {
 //    std::cerr << "~Delegate=" << n << std::endl;
 //  }
 //  else {
-    while (m_cntDispatchProcesses.load( boost::memory_order_acquire ) != 0 ); // wait for dispatch to finish
+    while (m_cntDispatchProcesses.load( std::memory_order_acquire ) != 0 ); // wait for dispatch to finish
 //  }
-  
+
   m_vDispatch.clear();
   m_vDispatchMaster.clear();
 }
 
-template<class T> 
+template<class T>
 void Delegate<T>::operator()( T t ) {
 
   const_iterator iter;
 
-  m_cntDispatchProcesses.fetch_add( 1, boost::memory_order_acquire );
+  m_cntDispatchProcesses.fetch_add( 1, std::memory_order_acquire );
   m_spinlockVectorReplace.wait();  // wait for any running replacement to finish
 
   { // ensure things get cleared up in the case of exception in delegated function
     BOOST_SCOPE_EXIT_TPL(&m_cntDispatchProcesses) {
-      m_cntDispatchProcesses.fetch_sub( 1, boost::memory_order_release );
+      m_cntDispatchProcesses.fetch_sub( 1, std::memory_order_release );
     } BOOST_SCOPE_EXIT_END
 
     iter = m_vDispatch.begin();  // start dispatching
@@ -130,30 +144,30 @@ void Delegate<T>::operator()( T t ) {
   } // end scope
 
   // update dispatch with queued changes
-  if ( 0 != m_cntChanges.load( boost::memory_order_acquire ) ) {
+  if ( 0 != m_cntChanges.load( std::memory_order_acquire ) ) {
     m_spinlockVectorUpdate.lock();
     VectorReplace();
-    m_spinlockVectorUpdate.unlock(); 
+    m_spinlockVectorUpdate.unlock();
   }
 
 }
 
-template<class T> 
+template<class T>
 void Delegate<T>::Add( OnDispatchHandler function ) {
 
-  m_spinlockVectorUpdate.lock(); 
+  m_spinlockVectorUpdate.lock();
 
   m_vDispatchMaster.push_back( function );
 
-  m_cntChanges.fetch_add( 1, boost::memory_order_release );
+  m_cntChanges.fetch_add( 1, std::memory_order_release );
 
   VectorReplace();
 
-  m_spinlockVectorUpdate.unlock(); 
+  m_spinlockVectorUpdate.unlock();
 
 }
 
-template<class T> 
+template<class T>
 void Delegate<T>::Remove( OnDispatchHandler function ) {
 
   m_spinlockVectorUpdate.lock();
@@ -167,7 +181,7 @@ void Delegate<T>::Remove( OnDispatchHandler function ) {
     ++iter;
   }
 
-  m_cntChanges.fetch_add( 1, boost::memory_order_release );
+  m_cntChanges.fetch_add( 1, std::memory_order_release );
 
   VectorReplace();
 
@@ -176,20 +190,20 @@ void Delegate<T>::Remove( OnDispatchHandler function ) {
 }
 
 template<class T>
-void Delegate<T>::VectorReplace( void ) {
+void Delegate<T>::VectorReplace() {
 
   // perform VectorReplace only outside of operator() method influence
-  if ( 0 == m_cntDispatchProcesses.load( boost::memory_order_acquire ) ) {
+  if ( 0 == m_cntDispatchProcesses.load( std::memory_order_acquire ) ) {
     m_spinlockVectorReplace.lock();
 //    m_spinlockVectorUpdate.lock();
 
     // ensure we are not in process
-    if ( 0 == m_cntDispatchProcesses.load( boost::memory_order_acquire ) ) {
+    if ( 0 == m_cntDispatchProcesses.load( std::memory_order_acquire ) ) {
       m_vDispatch.resize( m_vDispatchMaster.size() );
       typedef typename vDispatch_t::iterator iterator;
       const_iterator ixSrc = m_vDispatchMaster.begin();
       iterator ixDst = m_vDispatch.begin();
-      for ( 
+      for (
         ;
         ixSrc != m_vDispatchMaster.end();
         ++ixSrc, ++ixDst ) {
@@ -197,7 +211,7 @@ void Delegate<T>::VectorReplace( void ) {
       }
     }
 
-    m_cntChanges.store( 0, boost::memory_order_release );
+    m_cntChanges.store( 0, std::memory_order_release );
 
 //    m_spinlockVectorUpdate.unlock();
     m_spinlockVectorReplace.unlock();

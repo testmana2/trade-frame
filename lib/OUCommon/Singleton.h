@@ -15,11 +15,10 @@
 
 #include <stdexcept>
 
-#include <boost/thread/tss.hpp>
 #include <boost/utility.hpp>
+#include <boost/thread/tss.hpp>
 
 // other classes to fix:
-//   IQFeedProviderSingleton
 //   TimeSource
 
 // http://www.oneunified.net/blog/Personal/SoftwareDevelopment/CPP/Singleton.article
@@ -46,14 +45,14 @@ protected:
 private:
 };
 
-template<typename T> 
+template<typename T>
 class Singleton: boost::noncopyable, public SingletonBase {
 public:
-  static T& Instance() { return GlobalInstance(); }  // to be deprecated
   static T& GlobalInstance() {  // global to whole program
     static T _instance;
     return _instance;
   }
+
   static T& LocalUniqueInstance() {  // unique to this thread instance
     T* t( 0 );
     if ( 0 == m_pT.get() ) {
@@ -66,6 +65,7 @@ public:
     }
     return *t;
   }
+
   static T& LocalCommonInstance() { // unique to a number of thread instances, set with SetLocalCommonInstance
     T* t;
     switch ( m_source ) {
@@ -74,19 +74,21 @@ public:
       break;
     case Assigned:
       t = m_pT.get();
-      if ( 0 == t ) 
+      if ( 0 == t )
         throw std::runtime_error( "LocalCommonInstance not available" );
       return *t;
       break;
-    default: 
-      throw std::runtime_error( "m_source mis-assigned" );
+    default:
+      throw std::runtime_error( "LocalCommonInstance mis-assigned" );
       break;
     }
   }
+
   static void SetLocalCommonInstance( T* t ) {
     m_pT.reset( t );
   }
-  static void ClearLocalCommonInstance( void ) {
+
+  static void ClearLocalCommonInstance() {
     m_pT.reset();
   }
 
@@ -103,32 +105,5 @@ std::size_t Singleton<T>::m_nLUI( 0 );
 
 template<typename T>
 boost::thread_specific_ptr<T> Singleton<T>::m_pT;
-
-//
-// CMultipleInstanceTest
-//
-
-// a CRTP class to ensure Singleton'd class isn't multiply defined
-// see CBerkeleyDBEnvManager as an example
-template<typename T>
-class MultipleInstanceTest {
-public:
-  MultipleInstanceTest( void ) {
-#ifdef _DEBUG
-    ++m_ref;
-    // this may be changed to handle multi thread stuff, Dr. Dobbs has a solution
-    if ( 1 != m_ref ) throw std::runtime_error( "too many instances of Singleton typename T" );
-#endif
-  }
-protected:
-private:
-#ifdef _DEBUG
-  static int m_ref;  // validation that only one instance has been created
-#endif
-};
-
-#ifdef _DEBUG
-template<typename T> int MultipleInstanceTest<T>::m_ref = 0;
-#endif
 
 } // ou

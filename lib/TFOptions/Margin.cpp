@@ -21,6 +21,9 @@
 // https://www.interactivebrokers.com/en/index.php?f=marginnew&p=opt
 // http://www.cboe.com/LearnCenter/pdf/margin2-00.pdf
 
+// TODO: options: need to use multiplier?
+// TODO: need mechanism to identify spread type
+
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 namespace option { // options
@@ -428,8 +431,6 @@ void Calc( Cash& mr, const ShortPut& sput, const LongPut& lput, const ShortCall&
 void Calc( RegTIra& mr, const ShortPut& sput, const LongPut& lput, const ShortCall& scall, const LongCall& lcall ) {
   mr.margin = sput.quantity * sput.pInstrument->GetStrike() - lput.quantity * lput.pInstrument->GetStrike();
 }
-
-
 
 } // namespace margin
 } // namespace option

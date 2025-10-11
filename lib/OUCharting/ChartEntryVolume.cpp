@@ -11,8 +11,6 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-//#include "StdAfx.h"
-
 #include "ChartEntryVolume.h"
 
 namespace ou { // One Unified
@@ -21,41 +19,46 @@ namespace ou { // One Unified
 // CChartEntryVolume
 //
 
-ChartEntryVolume::ChartEntryVolume(void)
-: ChartEntryBaseWithTime()
+ChartEntryVolume::ChartEntryVolume()
+: ChartEntryPrice()
 {
 }
 
-ChartEntryVolume::ChartEntryVolume(size_type nSize) 
-: ChartEntryBaseWithTime(nSize)
-{
+//ChartEntryVolume::ChartEntryVolume(size_type nSize)
+//: ChartEntryPrice(nSize)
+//{
+//}
+
+ChartEntryVolume::~ChartEntryVolume() {
 }
 
-ChartEntryVolume::~ChartEntryVolume(void) {
+void ChartEntryVolume::Reserve( size_type nSize ) {
+  ChartEntryPrice::Reserve( nSize );
 }
 
-void ChartEntryVolume::Reserve(size_type nSize ) {
-  ChartEntryBaseWithTime::Reserve( nSize );
+void ChartEntryVolume::Append( boost::posix_time::ptime dt, int volume ) {
+  ChartEntryPrice::Append( dt, (double) volume );
 }
 
-void ChartEntryVolume::Append( boost::posix_time::ptime dt, int volume) {
-  ChartEntryBaseWithTime::Append( dt, (double) volume );
+void ChartEntryVolume::Append( const ou::tf::Bar& bar ) {
+  Append( bar.DateTime(), bar.Volume() );
 }
 
 bool ChartEntryVolume::AddEntryToChart( XYChart *pXY, structChartAttributes *pAttributes ) {
   bool bAdded( false );
-  ChartEntryBaseWithTime::ClearQueue();
-  if ( 0 != this->m_vDateTime.size() ) {
-    DoubleArray daXData = ChartEntryBaseWithTime::GetDateTimes();
+  ChartEntryPrice::ClearQueue();
+  if ( 0 != ChartEntryPrice::Size() ) {
+    DoubleArray daXData = ChartEntryTime::GetDateTimes();
     if ( 0 != daXData.len ) {
       BarLayer *bl = pXY->addBarLayer( this->GetPrices() );
-    
+
       bl->setXData( daXData );
       pAttributes->dblXMin = daXData[0];
       pAttributes->dblXMax = daXData[ daXData.len - 1 ];
 
       DataSet *pds = bl->getDataSet(0);
       pds->setDataColor( m_eColour, 0xff000000, 0xff000000 );
+      pds->setDataName( GetName().c_str() );
 
       bAdded = true;
     }

@@ -19,20 +19,27 @@
 
 #include <TFTrading/Instrument.h>
 
+#include <TFIQFeed/Fundamentals.h>
+
 #include "MarketSymbol.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 namespace iqfeed { // IQFeed
 
-typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
-typedef ou::tf::iqfeed::MarketSymbol::TableRowDef trd_t;
+using pInstrument_t = ou::tf::Instrument::pInstrument_t;
+using trd_t = ou::tf::iqfeed::MarketSymbol::TableRowDef;
+using date_t = boost::gregorian::date;
 
 // day is supplied because IQFeed Market Symbol File doesn't have the day in for futures and futures options
-pInstrument_t BuildInstrument( const std::string& sName, const trd_t& trd, boost::uint16_t day = 0 );  // equities and futures
-//pInstrument_t BuildInstrument( const std::string& sName, const trd_t& trd, pInstrument_t pUnderlying ); // options and futuresoptions
+pInstrument_t BuildInstrument( const std::string& sGenericName, const trd_t& trd );
+// deprecate (uses assumed defaults)
+pInstrument_t BuildInstrument( const std::string& sGenericName, const trd_t& trd, date_t );
+// preferred (uses better fundamentals):
+pInstrument_t BuildInstrument( const trd_t& trd, const Fundamentals& );
+// best (uses fundamentals only):
+pInstrument_t BuildInstrument( const Fundamentals& );
 
 } // namespace iqfeed
 } // namespace TradeFrame
 } // namespace ou
-

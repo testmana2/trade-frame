@@ -67,7 +67,7 @@ boost::gregorian::date Next3rdFriday( boost::gregorian::date date ) {
 
 // gold future calc:
 // http://www.cmegroup.com/trading/metals/files/pm264-fact-card-gold-options.pdf
-// options expiry: four business days prior to end of month, not on friday, 13:30pm, assignments notify 16:30, excercise 20:00
+// options expiry: four business days prior to end of month, not on friday, 13:30pm, assignments notify 16:30, exercise 20:00
 // trading: sunday - friday 18:00 - 17:15 et
 // http://www.cmegroup.com/trading/metals/precious/gold_product_calendar_futures.html
 
@@ -76,12 +76,14 @@ boost::gregorian::date Next3rdFriday( boost::gregorian::date date ) {
 // setUSDates is in TFTimeSeries/ExchangeHolidays.cpp
 
 // want the year/month combination
-namespace local {
+namespace {
   
 boost::gregorian::date CalcNBusinessDaysBack( boost::gregorian::date date, unsigned int cnt, bool bAllowFriday ) {
-  boost::gregorian::date dateTemp( date.year(), date.month(), 1 );
-  dateTemp += boost::gregorian::months( 1 );  // add one month, go to first of month, and step backwards
-  boost::gregorian::day_iterator iterDay( boost::gregorian::date( dateTemp.year(), dateTemp.month(), 1 ), 1 );
+  //boost::gregorian::date dateTemp( date.year(), date.month(), 1 );
+  //dateTemp += boost::gregorian::months( 1 );  // add one month, go to first of month, and step backwards
+  // at least for gold futures options, indicated month has expiry in the previous month (for some wierd reason)
+  // so step back one day into previous month
+  boost::gregorian::day_iterator iterDay( boost::gregorian::date( date.year(), date.month(), date.day() ), 1 );
   //unsigned int cnt( 4 ); // need to move back four business days
   while ( 0 != cnt ) { // move to fourth last business day
     using namespace ou::tf::holidays::exchange;
@@ -117,14 +119,16 @@ boost::gregorian::date CalcNBusinessDaysBack( boost::gregorian::date date, unsig
   return *iterDay;
 }  
 
-} // namespace local
+} // namespace file local
 
 boost::gregorian::date FuturesExpiry( boost::gregorian::date date ) {
-  return local::CalcNBusinessDaysBack( date, 3, true );
+  // keep within current month, so move one month forward and step backwards into this month
+  return CalcNBusinessDaysBack( date + boost::gregorian::months( 1 ), 3, true );
 }
 
 boost::gregorian::date FuturesOptionExpiry( boost::gregorian::date date ) {
-  return local::CalcNBusinessDaysBack( date, 4, false );
+  // steps into previous month
+  return CalcNBusinessDaysBack( date, 4, false );
 }
 
 

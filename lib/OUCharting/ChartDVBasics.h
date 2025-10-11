@@ -19,6 +19,12 @@
 
 #pragma once
 
+#include <OUCharting/ChartDataView.h>
+#include <OUCharting/ChartEntryBars.h>
+#include <OUCharting/ChartEntryVolume.h>
+#include <OUCharting/ChartEntryIndicator.h>
+#include <OUCharting/ChartEntryShape.h>
+#include <OUCharting/ChartEntryMark.h>
 
 #include <TFTimeSeries/TimeSeries.h>
 #include <TFTimeSeries/BarFactory.h>
@@ -33,22 +39,15 @@
 #include <TFIndicators/TSSWRateOfChange.h>
 #include <TFIndicators/TSSWStats.h>
 
-#include <OUCharting/ChartDataView.h>
-#include <OUCharting/ChartEntryBars.h>
-#include <OUCharting/ChartEntryVolume.h>
-#include <OUCharting/ChartEntryIndicator.h>
-#include <OUCharting/ChartEntryShape.h>
-#include <OUCharting/ChartEntryMark.h>
-
 namespace ou { // One Unified
 
 class ChartDVBasics {
 public:
 
-  ChartDVBasics(void);
-  virtual ~ChartDVBasics(void);
+  ChartDVBasics();
+  virtual ~ChartDVBasics();
 
-  ou::ChartDataView& GetChartDataView( void ) { return m_dvChart; };
+  ou::ChartDataView* GetChartDataView() { return &m_dvChart; };
 
 //  void HandleFirstQuote( const ou::tf::Quote& quote );
 //  void HandleFirstTrade( const ou::tf::Trade& trade );
@@ -57,7 +56,7 @@ public:
 
 protected:
 
-  enum enumTradeDirection { ETradeDirUnkn=0, ETradeDirUp, ETradeDirDn } m_TradeDirection;
+  enum class ETradeDirection { TradeDirUnkn=0, TradeDirUp, TradeDirDn } m_TradeDirection;
 
   bool m_bFirstTrade;
 
@@ -121,7 +120,7 @@ protected:
 
     double m_dblBollingerWidth;
 
-    void SetProperties( ou::Colour::enumColour colour, const std::string& sName ) {
+    void SetProperties( ou::Colour::EColour colour, const std::string& sName ) {
       m_ceEma.SetName( sName );
       m_ceEma.SetColour( colour );
       m_ceUpperBollinger.SetColour( colour );
@@ -139,7 +138,7 @@ protected:
         m_statsSlopeBy3( m_tsStatsSlopeBy2, boost::posix_time::time_duration( 0, 0, 15 ) )
     {
     }
-    infoBollinger( const infoBollinger& rhs ) 
+    infoBollinger( const infoBollinger& rhs )
       : m_td( rhs.m_td ), m_quotes( rhs.m_quotes ), m_dblBollingerWidth( rhs.m_dblBollingerWidth ),
       m_ema( m_quotes, m_td ), m_stats( m_quotes, m_td ),
       m_statsSlope( m_ema, boost::posix_time::time_duration( 0, 0, 30 ) ),
@@ -150,7 +149,7 @@ protected:
     ~infoBollinger( void ) {};
   };
 
-  typedef std::vector<infoBollinger> vInfoBollinger_t;
+  using vInfoBollinger_t = std::vector<infoBollinger>;
   vInfoBollinger_t m_vInfoBollinger;
 
   ou::ChartEntryIndicator m_ceTrade;

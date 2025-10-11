@@ -30,7 +30,7 @@ class UpdateInstrumentDescEvent: public wxEvent {
 public:
   UpdateInstrumentDescEvent( wxEventType eventType, const std::string& s ): wxEvent( 0, eventType ), m_sName( s ) {};
   UpdateInstrumentDescEvent( const UpdateInstrumentDescEvent& event ): wxEvent( *this ), m_sName( event.m_sName ) {};
-  ~UpdateInstrumentDescEvent( void ) {};
+  ~UpdateInstrumentDescEvent() {};
   UpdateInstrumentDescEvent* Clone( void ) const { return new UpdateInstrumentDescEvent( *this ); }
   const std::string& InstrumentName( void ) { return m_sName; };
 protected:
@@ -51,8 +51,8 @@ public:
 
   struct Order_t {
     wxString sSymbol;
-    ou::tf::OrderSide::enumOrderSide eOrderSide;
-    ou::tf::OrderType::enumOrderType eOrderType;
+    ou::tf::OrderSide::EOrderSide eOrderSide;
+    ou::tf::OrderType::EOrderType eOrderType;
     unsigned long nQuantity;
     double dblPrice1;
     double dblPrice2;
@@ -74,21 +74,21 @@ public:
     OnFocusPropogate = function;
   }
 
-  PanelManualOrder( void );
+  PanelManualOrder();
   PanelManualOrder(
-   wxWindow* parent, 
-   wxWindowID id = SYMBOL_PANELMANUALORDER_IDNAME, 
-   const wxPoint& pos = SYMBOL_PANELMANUALORDER_POSITION, 
-   const wxSize& size = SYMBOL_PANELMANUALORDER_SIZE, 
-   long style = SYMBOL_PANELMANUALORDER_STYLE 
+   wxWindow* parent,
+   wxWindowID id = SYMBOL_PANELMANUALORDER_IDNAME,
+   const wxPoint& pos = SYMBOL_PANELMANUALORDER_POSITION,
+   const wxSize& size = SYMBOL_PANELMANUALORDER_SIZE,
+   long style = SYMBOL_PANELMANUALORDER_STYLE
    );
-  ~PanelManualOrder(void);
+  ~PanelManualOrder();
 
   bool Create(
-   wxWindow* parent, 
-   wxWindowID id = SYMBOL_PANELMANUALORDER_IDNAME, 
-   const wxPoint& pos = SYMBOL_PANELMANUALORDER_POSITION, 
-   const wxSize& size = SYMBOL_PANELMANUALORDER_SIZE, 
+   wxWindow* parent,
+   wxWindowID id = SYMBOL_PANELMANUALORDER_IDNAME,
+   const wxPoint& pos = SYMBOL_PANELMANUALORDER_POSITION,
+   const wxSize& size = SYMBOL_PANELMANUALORDER_SIZE,
    long style = SYMBOL_PANELMANUALORDER_STYLE
    );
 
@@ -121,18 +121,18 @@ private:
   wxButton* m_btnCancel;
   wxStaticText* m_txtStatus;
 
-  void Init( void );
-  void CreateControls( void );
-  bool ShowToolTips( void ) { return true; };
+  void Init();
+  void CreateControls();
+  bool ShowToolTips() { return true; };
 
-  void EnableButtons( void );
-  void DisableButtons( void );
+  void EnableButtons();
+  void DisableButtons();
 
   void OnFocusChange( wxFocusEvent& event );
 
-  void EmitOrder( void );
+  void EmitOrder();
 
-  void OnClose( wxCloseEvent& event );
+  void OnDestroy( wxWindowDestroyEvent& event );
   void OnBtnMarket( wxCommandEvent& event ) { m_order.eOrderType = ou::tf::OrderType::Market; };
   void OnBtnLimit( wxCommandEvent& event ) { m_order.eOrderType = ou::tf::OrderType::Limit; };
   void OnBtnStop( wxCommandEvent& event ) { m_order.eOrderType = ou::tf::OrderType::Stop; };

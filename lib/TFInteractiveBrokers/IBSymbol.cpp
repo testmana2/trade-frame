@@ -12,24 +12,19 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#ifdef _WIN32
-#include "StdAfx.h"
-#else
-#include "linux/StdAfx.h"
-#endif
-
 #include <OUCommon/TimeSource.h>
 
 #include "IBSymbol.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
+namespace ib { // Interactive Brokers
 
-IBSymbol::IBSymbol( inherited_t::symbol_id_t idSym, pInstrument_t pInstrument, TickerId idTicker )
-: 
-  Symbol<IBSymbol>( pInstrument, idSym ), 
-    m_TickerId( idTicker ), m_conId( 0 ),
-    m_bAskFound( false ), m_bAskSizeFound( false ), 
+Symbol::Symbol( inherited_t::idSymbol_t idSym, pInstrument_t pInstrument, TickerId idTicker )
+:
+  ou::tf::Symbol<Symbol>( pInstrument, idSym ),
+    m_TickerId( idTicker ),
+    m_bAskFound( false ), m_bAskSizeFound( false ),
     m_bBidFound( false ), m_bBidSizeFound( false ),
     m_bLastTimeStampFound( false ), m_bLastFound( false ), m_bLastSizeFound( false ),
     m_nAskSize( 0 ), m_nBidSize( 0 ), m_nLastSize( 0 ),
@@ -42,11 +37,11 @@ IBSymbol::IBSymbol( inherited_t::symbol_id_t idSym, pInstrument_t pInstrument, T
   inherited_t::m_id = idSym;
 }
 
-IBSymbol::IBSymbol( pInstrument_t pInstrument, TickerId idTicker )
-: 
-  Symbol<IBSymbol>( pInstrument ), 
-    m_TickerId( idTicker ), m_conId( 0 ),
-    m_bAskFound( false ), m_bAskSizeFound( false ), 
+Symbol::Symbol( pInstrument_t pInstrument, TickerId idTicker )
+:
+  ou::tf::Symbol<Symbol>( pInstrument ),
+    m_TickerId( idTicker ),
+    m_bAskFound( false ), m_bAskSizeFound( false ),
     m_bBidFound( false ), m_bBidSizeFound( false ),
     m_bLastTimeStampFound( false ), m_bLastFound( false ), m_bLastSizeFound( false ),
     m_nAskSize( 0 ), m_nBidSize( 0 ), m_nLastSize( 0 ),
@@ -58,10 +53,10 @@ IBSymbol::IBSymbol( pInstrument_t pInstrument, TickerId idTicker )
 {
 }
 
-IBSymbol::~IBSymbol(void) {
+Symbol::~Symbol(void) {
 }
 
-void IBSymbol::AcceptTickPrice(TickType tickType, double price) {
+void Symbol::AcceptTickPrice(TickType tickType, double price) {
   switch ( tickType ) {
     case TickType::BID:
       if ( price != m_dblBid ) {
@@ -97,12 +92,27 @@ void IBSymbol::AcceptTickPrice(TickType tickType, double price) {
   }
 }
 
-void IBSymbol::AcceptTickSize(TickType tickType, int size) {
+void Symbol::AcceptTickSize(TickType tickType, Decimal size_decimal) {
+
+  // 2024/03/17 found with a BID_SIZE forex quote
+  static const Decimal scary( 0x7c00000000000000 ); // 8935141660703064064
+
+  uint32_t size;
+  if ( scary == size_decimal ) {
+    size = 0;
+  }
+  else {
+    // go native at some point?  [high conversion overhead]
+    uint32_t size = __bid64_to_uint32_rnint( size_decimal );
+  }
 
   switch ( m_pInstrument->GetInstrumentType() ) {
   case InstrumentType::Stock:
   case InstrumentType::ETF:
     size *= 100;
+    break;
+  case InstrumentType::Currency:
+    // any re-sizing?
     break;
   default:
     break;
@@ -136,7 +146,7 @@ void IBSymbol::AcceptTickSize(TickType tickType, int size) {
   }
 }
 
-void IBSymbol::AcceptTickString(TickType tickType, const std::string& value) {
+void Symbol::AcceptTickString(TickType tickType, const std::string& value) {
   switch ( tickType ) {
     case TickType::LAST_TIMESTAMP:
       m_bLastTimeStampFound = true;
@@ -146,31 +156,31 @@ void IBSymbol::AcceptTickString(TickType tickType, const std::string& value) {
   }
 }
 
-void IBSymbol::BuildQuote() {
+void Symbol::BuildQuote() {
 //  if ( m_bAskFound && m_bBidFound && m_bAskSizeFound && m_bBidSizeFound ) {
     if ( m_bAskFound || m_bBidFound ) {
-    //boost::local_time::local_date_time ldt = 
+    //boost::local_time::local_date_time ldt =
     //  boost::local_time::local_microsec_clock::local_time();
-    Quote quote( ou::TimeSource::Instance().External(), m_dblBid, m_nBidSize, m_dblAsk, m_nAskSize );
-    //std::cout << "Q:" << quote.m_dt << " " 
+    Quote quote( ou::TimeSource::GlobalInstance().External(), m_dblBid, m_nBidSize, m_dblAsk, m_nAskSize );
+    //std::cout << "Q:" << quote.m_dt << " "
     //  << quote.m_nBidSize << "@" << quote.m_dblBid << " "
-    //  << quote.m_nAskSize << "@" << quote.m_dblAsk 
+    //  << quote.m_nAskSize << "@" << quote.m_dblAsk
     //  << std::endl;
-    m_OnQuote( quote );  
-    // 2010-06-21 not sure if these flags should be reset 
+    m_OnQuote( quote );
+    // 2010-06-21 not sure if these flags should be reset
     //   basics are if Ask or Bid value changes, then emit regardless of Size
     //   size doesn't matter for now
     m_bAskFound = m_bBidFound = m_bAskSizeFound = m_bBidSizeFound = false;
   }
 }
 
-void IBSymbol::BuildTrade() {
+void Symbol::BuildTrade() {
   //if ( !m_bLastTimeStampFound && m_bLastFound && m_bLastSizeFound ) {
   //  std::cout << m_sSymbolName << " Trade is weird" << std::endl;
   //}
   //if ( m_bLastTimeStampFound && m_bLastFound && m_bLastSizeFound ) {
   if ( m_bLastFound && m_bLastSizeFound ) {
-    Trade trade( ou::TimeSource::Instance().External(), m_dblLast, m_nLastSize );
+    Trade trade( ou::TimeSource::GlobalInstance().External(), m_dblLast, m_nLastSize );
     //std::cout << "T:" << trade.m_dt << " " << trade.m_nTradeSize << "@" << trade.m_dblTrade << std::endl;
     m_OnTrade( trade );
     //m_bLastTimeStampFound = m_bLastFound = m_bLastSizeFound = false;
@@ -178,7 +188,7 @@ void IBSymbol::BuildTrade() {
   }
 }
 
-void IBSymbol::Greeks( double optPrice, double undPrice, double pvDividend, 
+void Symbol::Greeks( double optPrice, double undPrice, double pvDividend,
                         double impliedVol, double delta, double gamma, double vega, double theta ) {
 
   m_dblOptionPrice = optPrice;
@@ -186,7 +196,7 @@ void IBSymbol::Greeks( double optPrice, double undPrice, double pvDividend,
   m_dblPvDividend = pvDividend;
 
   ptime dt;
-  ou::TimeSource::Instance().External( &dt );
+  ou::TimeSource::GlobalInstance().External( &dt );
 
   Greek greek( dt, impliedVol, delta, gamma, theta, vega, 0 );
 
@@ -194,5 +204,6 @@ void IBSymbol::Greeks( double optPrice, double undPrice, double pvDividend,
 
 }
 
+} // namespace ib
 } // namespace tf
 } // namespace ou

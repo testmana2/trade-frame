@@ -12,22 +12,25 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <OUCommon/TimeSource.h>
 
 #include "IndicatorPackage.h"
 
-IndicatorPackage::IndicatorPackage( 
+namespace {
+ static const double c_zzTrin( 0.15 ); // zigzag peak on trin
+ static const double c_zzIndex( 5.0 ); // zigzag peak on index delta
+}
+
+IndicatorPackage::IndicatorPackage(
      pProvider_t pDataProvider,
      pInstrument_t pInstIndex, pInstrument_t pInstTick, pInstrument_t pInstTrin
-   ) 
+   )
    : m_bStarted( false ), m_pTrin( pInstTrin ), m_pTick( pInstTick ), m_pIndex( pInstIndex ), m_pProvider( pDataProvider ),
-     m_zzTrin( 0.15), m_zzIndex( 5.0 ),
+     m_zzTrin( c_zzTrin ), m_zzIndex( c_zzIndex ),
      m_bFirstIndexFound( false ), m_dblFirstIndex( 0.0 ),
-     m_nPixelsX( 600 ), m_nPixelsY( 200 ), 
-     m_dblTrin( 0 ), m_dblOfsIdx( 0 ), 
-     m_bIndexOfZZPairReady( false ), m_bTrinOfZZPairReady( false ), 
+     m_nPixelsX( 600 ), m_nPixelsY( 200 ),
+     m_dblTrin( 0 ), m_dblOfsIdx( 0 ),
+     m_bIndexOfZZPairReady( false ), m_bTrinOfZZPairReady( false ),
      m_dblZZTrin( 0.0 ), m_dblZZIndex( 0.0 ), m_bDayView( true )
 
 {
@@ -51,11 +54,11 @@ IndicatorPackage::IndicatorPackage(
   m_pProvider->AddTradeHandler( m_pTick, MakeDelegate( this, &IndicatorPackage::HandleOnTick ) );
   m_pProvider->AddTradeHandler( m_pIndex, MakeDelegate( this, &IndicatorPackage::HandleOnIndex ) );
 
-  ptime now = ou::TimeSource::Instance().External();
-  ptime dtBegin( 
-        ou::TimeSource::Instance().ConvertRegionalToUtc( now.date(), time_duration( 9, 30 , 0 ), "America/New_York", true ) );
-  ptime dtEnd( 
-        ou::TimeSource::Instance().ConvertRegionalToUtc( now.date(), time_duration( 16, 0 , 0 ), "America/New_York", true ) );
+  ptime now = ou::TimeSource::GlobalInstance().External();
+  ptime dtBegin(
+        ou::TimeSource::GlobalInstance().ConvertRegionalToUtc( now.date(), time_duration( 9, 30 , 0 ), "America/New_York" ) );
+  ptime dtEnd(
+        ou::TimeSource::GlobalInstance().ConvertRegionalToUtc( now.date(), time_duration( 16, 0 , 0 ), "America/New_York" ) );
 
   m_ctViewBegin = m_ctDayBegin = Chart::chartTime( dtBegin.date().year(), dtBegin.date().month(), dtBegin.date().day(),
                                      dtBegin.time_of_day().hours(), dtBegin.time_of_day().minutes(), dtBegin.time_of_day().seconds() );
@@ -63,23 +66,28 @@ IndicatorPackage::IndicatorPackage(
   m_ctViewEnd   = m_ctDayEnd   = Chart::chartTime( dtEnd.date().year(), dtEnd.date().month(), dtEnd.date().day(),
                                      dtEnd.time_of_day().hours(), dtEnd.time_of_day().minutes(), dtEnd.time_of_day().seconds() );
 
+//  std::cout << pInstIndex->GetInstrumentName()
+//            << ": " << dtBegin << "," << dtEnd
+//            << "; " << m_ctViewBegin << "," << m_ctViewEnd
+//            << std::endl;
+
 }
 
-IndicatorPackage::~IndicatorPackage(void) {
-  m_bfIndex.SetOnBarUpdated( 0 );
-  m_bfIndex.SetOnBarComplete( 0 );
-  m_zzTrin.SetOnPeakFound( 0 );
-  m_zzIndex.SetOnPeakFound( 0 );
+IndicatorPackage::~IndicatorPackage() {
+  m_bfIndex.SetOnBarUpdated( nullptr );
+  m_bfIndex.SetOnBarComplete( nullptr );
+  m_zzTrin.SetOnPeakFound( nullptr );
+  m_zzIndex.SetOnPeakFound( nullptr );
   m_pProvider->RemoveTradeHandler( m_pTrin, MakeDelegate( this, &IndicatorPackage::HandleOnTrin ) );
   m_pProvider->RemoveTradeHandler( m_pTick, MakeDelegate( this, &IndicatorPackage::HandleOnTick ) );
   m_pProvider->RemoveTradeHandler( m_pIndex, MakeDelegate( this, &IndicatorPackage::HandleOnIndex ) );
 }
 
-//void IndicatorPackage::Start( void ) {
+//void IndicatorPackage::Start() {
 //}
 
-void IndicatorPackage::ToggleView( void ) {
-  
+void IndicatorPackage::ToggleView() {
+
   if ( m_bDayView ) {
     if ( 1 <= m_bdIndex.m_vTime.size() ) {
       m_bDayView = false;  // switch to short view
@@ -140,7 +148,7 @@ void IndicatorPackage::HandleOnZZIndexPeakFound( const ou::tf::ZigZag&, ptime, d
   PushZZPair();
 }
 
-void IndicatorPackage::PushZZPair( void ) {
+void IndicatorPackage::PushZZPair() {
   if ( m_bTrinOfZZPairReady && m_bIndexOfZZPairReady ) {
     ZZPair zz( m_dblZZIndex, m_dblZZTrin );
     m_lfIndexTrinPair.push( zz );
@@ -153,7 +161,7 @@ void IndicatorPackage::SetChartDimensions( unsigned int x, unsigned int y ) {
   m_nPixelsY = y;
 }
 
-void IndicatorPackage::PopData( void ) {
+void IndicatorPackage::PopData() {
 
   ou::tf::Trade trade;
 
@@ -174,7 +182,7 @@ void IndicatorPackage::PopData( void ) {
 
 }
 
-void IndicatorPackage::DrawCharts( void ) {
+void IndicatorPackage::DrawCharts() {
 
   if ( !m_bDayView ) {
     ptime t( m_bdIndex.m_barWorking.DateTime() );
@@ -196,25 +204,29 @@ void IndicatorPackage::DrawChart( BarDoubles& bd, const std::string& sName ) {
     XYChart chart( m_nPixelsX, m_nPixelsY );
     chart.addTitle( sName.c_str() );
     chart.setPlotArea( 40, 10, m_nPixelsX - 50, m_nPixelsY - 43, 0xffffff, -1, 0xc0c0c0, 0xc0c0c0, -1 );
-    CandleStickLayer *candle = chart.addCandleStickLayer( 
+    CandleStickLayer *candle = chart.addCandleStickLayer(
       bd.High(), bd.Low(), bd.Open(), bd.Close(), 0x0000ff00, 0x00ff0000, 0xFFFF0001 );  // 0xff000000
     candle->setXData( bd.Time() );
     chart.xAxis()->setDateScale( m_ctViewBegin, m_ctViewEnd, 0, 0 );
-    MemBlock m = chart.makeChart( BMP );
+    Mark* pmk = chart.yAxis()->addMark( 0.0, 0, "" );
+    pmk->setLineWidth( 1 );
+    pmk->setAlignment( Chart::Left );
+    pmk->setDrawOnTop( false );
+    MemBlock m = chart.makeChart( Chart::BMP );
     if ( 0 != bd.m_cb ) bd.m_cb( m );
     bd.PopBack();
   }
 }
 
-void IndicatorPackage::DrawChartIndex( void ) {
+void IndicatorPackage::DrawChartIndex() {
   DrawChart( m_bdIndex, "Index" );
 }
 
-void IndicatorPackage::DrawChartTick( void ) {
+void IndicatorPackage::DrawChartTick() {
   DrawChart( m_bdTicks, "Ticks" );
 }
 
-void IndicatorPackage::DrawChartArms( void ) {
+void IndicatorPackage::DrawChartArms() {
 
   m_vTrin.push_back( m_dblTrin );
   m_vOfsIdx.push_back( m_dblOfsIdx );
@@ -258,11 +270,11 @@ void IndicatorPackage::DrawChartArms( void ) {
     pLLIndu->setBorderColor( 0xff000000 );
     //pLLIndu->moveFront();
     ++iterx1; ++iterx2; ++itery1; ++itery2;
-    ++iterc;  
+    ++iterc;
     if ( m_vColours.end() == iterc ) --iterc;
   }
 
-  MemBlock m = chart.makeChart( BMP );
+  MemBlock m = chart.makeChart( Chart::BMP );
   if ( 0 != m_OnDrawChartArms ) m_OnDrawChartArms( m );
 
   m_vTrin.pop_back();

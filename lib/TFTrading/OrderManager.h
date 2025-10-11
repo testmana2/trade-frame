@@ -43,50 +43,54 @@ class ProviderInterfaceBase;
 class OrderManager: public ou::db::ManagerBase<OrderManager> {
 public:
 
-  typedef keytypes::idInstrument_t idInstrument_t;
-  typedef Instrument::pInstrument_t pInstrument_t;
+  using idInstrument_t = keytypes::idInstrument_t;
+  using pInstrument_t = Instrument::pInstrument_t;
 
-  typedef keytypes::idPosition_t idPosition_t;
+  using idPosition_t = keytypes::idPosition_t;
 
-  typedef keytypes::idOrder_t idOrder_t;
-  typedef Order::pOrder_t pOrder_t;
+  using idOrder_t = keytypes::idOrder_t;
+  using pOrder_t = Order::pOrder_t;
 
-  typedef keytypes::idExecution_t idExecution_t;
-  typedef Execution::pExecution_t pExecution_t;
+  using idExecution_t = keytypes::idExecution_t;
+  using pExecution_t = Execution::pExecution_t;
 
-  OrderManager(void);
-  ~OrderManager(void);
+  OrderManager();
+  virtual ~OrderManager();
+
   pOrder_t ConstructOrder( // market order
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
-    boost::uint32_t nOrderQuantity, 
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
+    boost::uint32_t nOrderQuantity,
     idPosition_t idPosition = 0
     );
   pOrder_t ConstructOrder( // limit or stop
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
-    boost::uint32_t nOrderQuantity, double dblPrice1,  
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
+    boost::uint32_t nOrderQuantity, double dblPrice1,
     idPosition_t idPosition = 0
     );
   pOrder_t ConstructOrder( // limit and stop
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
     boost::uint32_t nOrderQuantity, double dblPrice1, double dblPrice2,
     idPosition_t idPosition = 0
     );
+
   void PlaceOrder( ProviderInterfaceBase* pProvider, Order::pOrder_t pOrder );
+  void UpdateOrder( ProviderInterfaceBase* pProvider, Order::pOrder_t pOrder );
   void CancelOrder( idOrder_t nOrderId );
   void ReportCancellation( idOrder_t nOrderId );  // feedback from provider
   void ReportExecution( idOrder_t orderId, const Execution& exec );  // feedback from provider
   void ReportCommission( idOrder_t nOrderId, double dblCommission );  // feedback from provider
-  void ReportErrors( idOrder_t nOrderId, OrderErrors::enumOrderErrors eError );  // feedback from provider
-//  ou::Delegate<const Order &> OnOrderCompleted;
+  void ReportErrors( idOrder_t nOrderId, OrderError::EOrderError eError );  // feedback from provider
+
+  void UpdateReference( idOrder_t nOrderId, const std::string& sReference );
 
   idOrder_t CheckOrderId( idOrder_t );  // used by ibtws to sync order ids
 
   // need a query to find pending orders like GTC, etc
 
-  typedef FastDelegate2<idInstrument_t,pInstrument_t&> OnOrderNeedsDetailsHandler;
+  using OnOrderNeedsDetailsHandler = FastDelegate2<idInstrument_t,pInstrument_t&>;
   void SetOnOrderNeedsDetails( OnOrderNeedsDetailsHandler function ) {
     OnOrderNeedsDetails = function;
   }
@@ -96,10 +100,10 @@ public:
 
 protected:
 
-  typedef std::pair<idExecution_t, pExecution_t> pairExecution_t;
-  typedef std::map<idExecution_t, pExecution_t> mapExecutions_t;
-  typedef mapExecutions_t::iterator iterExecutions_t;
-  typedef boost::shared_ptr<mapExecutions_t> pmapExecutions_t;
+  using pairExecution_t = std::pair<idExecution_t, pExecution_t>;
+  using mapExecutions_t = std::map<idExecution_t, pExecution_t>;
+  using iterExecutions_t = mapExecutions_t::iterator;
+  using pmapExecutions_t = boost::shared_ptr<mapExecutions_t>;
 
   struct structOrderState {
     pOrder_t pOrder;
@@ -109,28 +113,28 @@ protected:
       : pOrder( pOrder_ ), pProvider( 0 ), pmapExecutions( new mapExecutions_t ) {};
     structOrderState( pOrder_t& pOrder_, ProviderInterfaceBase* pProvider_ )
       : pOrder( pOrder_ ), pProvider( pProvider_ ), pmapExecutions( new mapExecutions_t ) {};
-    ~structOrderState( void ) {
+    ~structOrderState() {
 //      delete pmapExecutions;  // check that executions have been committed to db?
       // check that orders have been committed to db?
     }
   };
 
-  typedef std::pair<idOrder_t, structOrderState> pairOrderState_t;
-  typedef std::map<idOrder_t, structOrderState> mapOrders_t;  // used for active orders
-  typedef mapOrders_t::iterator iterOrders_t;
+  using pairOrderState_t = std::pair<idOrder_t, structOrderState>;
+  using mapOrders_t = std::map<idOrder_t, structOrderState>;  // used for active orders
+  using iterOrders_t = mapOrders_t::iterator;
 
 private:
 
-  //CAutoIncKey m_orderIds;  // may need to worry about multi-threading at some point in time
-  // ToDo:  migrate away from this later on, may need to deal with multiple programs interacting with same 
+  // AutoIncKey m_orderIds;  // may need to worry about multi-threading at some point in time
+  // ToDo:  migrate away from this later on, may need to deal with multiple programs interacting with same
   //  database table, and will need to auto-key from the order table instead.
 
   struct AutoIncKey {
-    int i;
-    AutoIncKey( void ) : i( 1 ) {};
-    int GetNextId( void ) { return ++i; };
-    void SetNextId( int i_ ) { assert( 0 < i_ ); i = i_; };
-    int GetCurrentId( void ) { return i; };
+    int key;
+    AutoIncKey() : key( 1 ) {};
+    int GetNextId() { return ++key; };
+    void SetNextId( int keyNew ) { assert( 0 < keyNew ); key = keyNew; };
+    int GetCurrentId() { return key; };
   } m_orderIds;
 
   mapOrders_t m_mapOrders; // all orders for when checking for consistency
@@ -140,11 +144,12 @@ private:
 
   OnOrderNeedsDetailsHandler OnOrderNeedsDetails;
 
-  void ConstructOrder( pOrder_t& pOrder );
+  bool ConstructOrder( pOrder_t& pOrder );
 
   void HandleRegisterTables( ou::db::Session& session );
   void HandleRegisterRows( ou::db::Session& session );
   void HandlePopulateTables( ou::db::Session& session );
+  void HandleLoadTables( ou::db::Session& session );
 
 };
 

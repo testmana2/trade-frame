@@ -11,17 +11,18 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-/* 
+/*
  * File:   WinChartView.cpp
  * Author: raymond@burkholder.net
- * 
+ *
  * Created on October 16, 2016, 5:53 PM
  */
 
-#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/asio/post.hpp>
 
-#include <wx/mstream.h>
 #include <wx/bitmap.h>
+#include <wx/cursor.h>
+#include <wx/mstream.h>
 #include <wx/dcclient.h>
 
 #include <OUCommon/TimeSource.h>
@@ -35,30 +36,32 @@ WinChartView::WinChartView(): wxWindow() {
   Init();
 }
 
-WinChartView::WinChartView( 
-  wxWindow* parent, wxWindowID id, 
-  const wxPoint& pos, 
-  const wxSize& size, 
+WinChartView::WinChartView(
+  wxWindow* parent, wxWindowID id,
+  const wxPoint& pos,
+  const wxSize& size,
   long style )
 {
-  
-  Init(); // binds and variables needed before 
+
+  Init(); // binds and variables needed before
   Create(parent, id, pos, size, style);
-  
+
 }
 
 WinChartView::~WinChartView() {
-  
+  assert( !m_threadDrawChart.joinable() ); // inheriting class needs a skip in the OnDestroy
 }
 
-void WinChartView::Init( void ) {
-  
-  m_bInDrawChart = false;
-  m_bThreadDrawChartActive = false;
+void WinChartView::Init() {
 
-  m_tdViewPortWidth = boost::posix_time::time_duration( 0, 10, 0 );  // viewport width is 10 minutes, until we make it adjustable
-  
-  Bind( EVENT_DRAW_CHART, &WinChartView::HandleGuiDrawChart, this );
+  SetLive_trail();
+
+  m_stateMouse = EMouse::NothingSpecial;
+
+  m_bInDrawChart = false;
+  m_pChartDataView = nullptr;
+
+  m_tdViewPortWidth = boost::posix_time::time_duration( 0, 10, 0 );  // default viewport width to 10 minutes
 
 }
 
@@ -73,17 +76,37 @@ bool WinChartView::Create( wxWindow* parent, wxWindowID id, const wxPoint& pos, 
   return true;
 }
 
-void WinChartView::CreateControls() {    
-  
-  Bind( wxEVT_CLOSE_WINDOW, &WinChartView::OnClose, this );  // start close of windows and controls
-  
-  Bind( wxEVT_PAINT, &WinChartView::HandlePaint, this );
-  Bind( wxEVT_SIZE, &WinChartView::HandleSize, this );
-  
-  Bind( wxEVT_MOUSEWHEEL, &WinChartView::HandleMouse, this );
-  Bind( wxEVT_MOTION, &WinChartView::HandleMouse, this );
-  Bind( wxEVT_LEAVE_WINDOW, &WinChartView::HandleMouse, this );
-  Bind( wxEVT_ENTER_WINDOW, &WinChartView::HandleMouse, this );  
+void WinChartView::CreateControls() {
+
+  using executor_type = boost::asio::io_context::executor_type;
+
+  m_pWork
+    = std::make_unique<boost::asio::executor_work_guard<executor_type> >( boost::asio::make_work_guard( m_context ) );
+  //if ( m_threadDrawChart.joinable() ) m_threadDrawChart.join(); // need to finish off any previous thread - may not be required here (only if it was to be re-used)
+  m_threadDrawChart = std::move( std::thread( &WinChartView::ThreadDrawChart, this ) );
+
+  BindEvents();
+
+}
+
+void WinChartView::BindEvents() {
+
+  Bind( wxEVT_DESTROY, &WinChartView::OnDestroy, this, this->GetId() );
+
+  Bind( wxEVT_PAINT, &WinChartView::HandlePaint, this, this->GetId() );
+  Bind( wxEVT_SIZE, &WinChartView::HandleSize, this, this->GetId() );
+
+  Bind( wxEVT_MOTION, &WinChartView::HandleMouseMotion, this, this->GetId() );
+  Bind( wxEVT_MOUSEWHEEL, &WinChartView::HandleMouseWheel, this, this->GetId() );
+
+  Bind( wxEVT_ENTER_WINDOW, &WinChartView::HandleMouseEnter, this, this->GetId() );
+  Bind( wxEVT_LEAVE_WINDOW, &WinChartView::HandleMouseLeave, this, this->GetId() );
+
+  Bind( wxEVT_LEFT_DOWN, &WinChartView::HandleMouseLeftDown, this, this->GetId() );
+  Bind( wxEVT_LEFT_UP,   &WinChartView::HandleMouseLeftUp,   this, this->GetId() );
+
+  Bind( wxEVT_RIGHT_DOWN, &WinChartView::HandleMouseRightDown, this, this->GetId() );
+  Bind( wxEVT_RIGHT_UP,   &WinChartView::HandleMouseRightUp,   this, this->GetId() );
 
   // this GuiRefresh initialization should come after all else
   m_timerGuiRefresh.SetOwner( this );
@@ -92,58 +115,330 @@ void WinChartView::CreateControls() {
 
 }
 
-void WinChartView::StartThread( void ) {
-  m_pThreadDrawChart = new boost::thread( &WinChartView::ThreadDrawChart1, this );
+void WinChartView::ThreadDrawChart() { // thread for initiating chart, work is posted
+  m_context.run(); // run while work is active
 }
 
+// called from PanelChartHdf5::LoadDataAndGenerateChart
+// called from PanelCharts::HandleInstrumentLiveChart
+// called from PanelFinancialChart::HandleTreeEventitemActivated
 void WinChartView::SetChartDataView( ou::ChartDataView* pChartDataView ) {
-  // need to make this thread save (drain the thread if this is assigning a new ChartDataView
-  if ( m_bThreadDrawChartActive ) StopThread();
-  m_pChartDataView = pChartDataView;
-  if ( nullptr != m_pChartDataView ) StartThread();
+  std::scoped_lock<std::mutex> lock( m_mutexChartDataView );   // PROBLEM line 509 lock 487
+  // TODO: need to sync with the gui refresh thread
+  m_pChartDataView = pChartDataView; // TODO: need some additional tender loving care with this for the mutex
+  if ( m_pChartDataView ) {
+    m_vpDataViewVisual = m_vpDataViewExtents = m_pChartDataView->GetExtents(); // TODO: may not want this if to maintain continuity across charts
+    //std::cout << "chart assignment extents: " << m_vpDataViewExtents.dtBegin << ',' << m_vpDataViewExtents.dtEnd << std::endl;
+    //std::cout << "chart assignment visual: " << m_vpDataViewVisual.dtBegin << ',' << m_vpDataViewVisual.dtEnd << std::endl;
+  }
+  else { // nullptr
+    m_vpDataViewVisual = m_vpDataViewExtents = ViewPort_t();
+  }
 }
 
-void WinChartView::HandleMouse( wxMouseEvent& event ) { 
-  if ( event.LeftIsDown() ) std::cout << "Left is down" << std::endl;
-  if ( event.MiddleIsDown() ) std::cout << "Middle is down" << std::endl;
-  if ( event.RightIsDown() ) std::cout << "Right is down" << std::endl;
-  wxCoord x, y;
-  event.GetPosition( &x, &y );
-  std::cout << x << "," << y << std::endl;
-//  std::cout << event.AltDown() << "," << event.ControlDown() << "," << event.ShiftDown() << std::endl;
-//  std::cout << event.GetWheelAxis() << "," << event.GetWheelDelta() << "," << event.GetWheelRotation() << std::endl;
+void WinChartView::HandleMouseMotion( wxMouseEvent& event ) {
+  //if ( event.LeftIsDown() ) std::cout << "Left is down" << std::endl;
+  //if ( event.MiddleIsDown() ) std::cout << "Middle is down" << std::endl;
+  //if ( event.RightIsDown() ) std::cout << "Right is down" << std::endl;
+  //std::cout << x << "," << y << std::endl;
+  //std::cout << event.AltDown() << "," << event.ControlDown() << "," << event.ShiftDown() << std::endl;
+  //std::cout << event.GetWheelAxis() << "," << event.GetWheelDelta() << "," << event.GetWheelRotation() << std::endl;
   // 0,120,-120
-  //event.Skip();
+
+  {
+    wxCoord x, y;
+    event.GetPosition( &x, &y );
+    m_chartMaster.SetCrossHairPosition( x, y );
+  }
+
+  int xLeft, xX, xRight;
+  m_chartMaster.GetX( xLeft, xX, xRight );
+
+  if ( m_vpDataViewVisual.HasBoth() ) {
+
+    assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+    //assert( m_vpDataViewVisual.dtBegin >= m_vpDataViewExtents.dtBegin );
+    //assert( m_vpDataViewVisual.dtEnd <= m_vpDataViewExtents.dtEnd );
+
+    switch ( m_stateMouse ) {
+      case EMouse::Down:
+        if ( event.Dragging() ) {
+          m_stateMouse = EMouse::Drag;
+        }
+        // fall into next state
+      case EMouse::Drag:
+        // TODO: update chart for intermediate positions? or just change cursor?
+        if ( m_coordXStart != xX ) {
+          int width = xRight - xLeft;
+          if ( 10 <= ( width ) ) {
+
+            int distance {};
+            if ( xX > m_coordXStart ) {
+              distance = xX - m_coordXStart;
+            }
+            else {
+              distance = m_coordXStart - xX;
+            }
+
+            boost::posix_time::time_duration tdMovement;
+            tdMovement  = m_tdViewPortWidth * distance;
+            tdMovement /= width;
+
+            if ( xX < m_coordXStart ) {
+              m_vpDataViewVisual.dtBegin += tdMovement;
+              m_vpDataViewVisual.dtEnd += tdMovement;
+
+              if ( m_vpDataViewVisual.dtBegin < m_vpDataViewExtents.dtBegin ) {
+                m_vpDataViewVisual.dtBegin = m_vpDataViewExtents.dtBegin;
+                if ( m_vpDataViewVisual.dtBegin >= m_vpDataViewVisual.dtEnd ) {
+                  m_vpDataViewVisual.dtEnd = m_vpDataViewVisual.dtBegin + m_tdViewPortWidth;
+                }
+              }
+
+              if ( m_vpDataViewVisual.dtEnd >= m_vpDataViewExtents.dtEnd ) {
+                m_vpDataViewVisual.dtEnd = m_vpDataViewExtents.dtEnd;
+                m_tdViewPortWidth = m_vpDataViewVisual.dtEnd - m_vpDataViewVisual.dtBegin;
+                //m_state = m_bSim ? EState::sim_trail : EState::live_trail;
+              }
+
+              // Still having problems here
+              assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+            }
+            else {
+              m_vpDataViewVisual.dtBegin -= tdMovement;
+              m_vpDataViewVisual.dtEnd -= tdMovement;
+
+              if ( m_vpDataViewVisual.dtBegin < m_vpDataViewExtents.dtBegin ) {
+                m_vpDataViewVisual.dtBegin = m_vpDataViewExtents.dtBegin;
+                if ( m_vpDataViewVisual.dtBegin >= m_vpDataViewVisual.dtEnd ) {
+                  m_vpDataViewVisual.dtEnd = m_vpDataViewVisual.dtBegin + m_tdViewPortWidth;
+                }
+              }
+
+              if ( m_vpDataViewVisual.dtEnd < m_vpDataViewExtents.dtEnd ) {
+                //m_state = m_bSim ? EState::sim_review : EState::live_review;
+                //m_vpDataViewVisual = ViewPort_t( m_vpDataViewExtents.dtEnd - tdNewWidth, m_vpDataViewExtents.dtEnd );
+              }
+
+              assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+            }
+          }
+
+          m_coordXStart = xX;
+
+        }
+        break;
+      case EMouse::NothingSpecial:
+        break;
+    }
+
+    if ( xLeft < xRight ) { // check for non-zer as well?
+      boost::posix_time::time_duration tdCursor;
+      boost::posix_time::time_duration tdDelta;
+
+      tdDelta = m_vpDataViewVisual.dtEnd - m_vpDataViewVisual.dtBegin;
+
+      tdCursor = tdDelta * ( xX - xLeft );
+      tdCursor /= ( xRight - xLeft );
+
+      boost::posix_time::ptime dtCursor =  m_vpDataViewVisual.dtBegin + tdCursor;
+
+      //boost::posix_time::time_duration td( dtCursor.time_of_day() );
+      //std::string sTime = boost::posix_time::to_simple_string( td );
+      std::string sDT = boost::posix_time::to_simple_string( dtCursor );
+      m_chartMaster.SetCrossHairTime( sDT );
+      m_pChartDataView->NotifyCursorDateTime( dtCursor );
+    }
+
+  }
+  else {
+    assert( true );  // test point
+  }
+
+  DrawChart(); // after CrossHairPosition
+
+  event.Skip();
+}
+
+void WinChartView::HandleMouseLeftDown( wxMouseEvent& event ) {
+  //wxCoord x, y;
+  //event.GetPosition( &x, &y );
+  int xLeft, xX, xRight;
+  m_chartMaster.GetX( xLeft, xX, xRight );
+  m_coordXStart = xX;
+  m_stateMouse = EMouse::Down;
+  event.Skip();
+}
+
+void WinChartView::HandleMouseLeftUp( wxMouseEvent& event ) {
+  switch ( m_stateMouse ) {
+    case EMouse::NothingSpecial:
+    case EMouse::Down:
+      HandleMouseLeftClick(); // only on non-movement
+      break;
+    case EMouse::Drag:
+      // update chart with MouseMove
+      break;
+  }
+
+  m_stateMouse = EMouse::NothingSpecial;
+
+  event.Skip();
+}
+
+void WinChartView::HandleMouseRightDown( wxMouseEvent& event ) {
+  event.Skip();
+}
+
+void WinChartView::HandleMouseRightUp( wxMouseEvent& event ) {
+  HandleMouseRightClick(); // only on non-movement
+  event.Skip();
+}
+
+void WinChartView::HandleMouseLeftClick() {
+  int nChart;
+  double dblY;
+  m_chartMaster.GetWorldCoordY( nChart, dblY );
+  LeftClick( nChart, dblY );
+}
+
+void WinChartView::HandleMouseRightClick() {
+  int nChart;
+  double dblY;
+  m_chartMaster.GetWorldCoordY( nChart, dblY );
+  RightClick( nChart, dblY );
+}
+
+void WinChartView::HandleMouseWheel( wxMouseEvent& event ) {
+
+  static const boost::posix_time::time_duration tdTenSeconds( 0, 0, 10 );
+
+  //int delta = event.GetWheelDelta();
+  int rotation = event.GetWheelRotation(); // has positive, negative, use delta to normalize
+
+  int xLeft, xX, xRight;
+  m_chartMaster.GetX( xLeft, xX, xRight );
+
+  if ( xLeft < xRight ) { // needs inequality for tdCursorOld divisor
+    // zoom in/out around cursor
+    // TODO: use this to provide date/time on cursor
+
+    boost::posix_time::time_duration tdDeltaOld;
+    boost::posix_time::time_duration tdDeltaNew;
+    boost::posix_time::time_duration tdCursorOld; // offset from left
+    boost::posix_time::time_duration tdCursorNew; // offset from left
+    boost::posix_time::ptime dtCursor;
+
+    //std::cout << "mouse wheel visual: " << m_vpDataViewVisual.dtBegin << ',' << m_vpDataViewVisual.dtEnd << std::endl;
+
+    bool bBegin = m_vpDataViewVisual.HasBegin();
+    bool bEnd = m_vpDataViewVisual.HasEnd();
+
+    if ( bBegin && bEnd ) {
+
+      //assert( m_vpDataViewVisual.dtBegin >= m_vpDataViewExtents.dtBegin );
+      //assert( m_vpDataViewVisual.dtEnd <= m_vpDataViewExtents.dtEnd );
+
+      assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+      tdDeltaOld = m_vpDataViewVisual.dtEnd - m_vpDataViewVisual.dtBegin;
+
+      tdCursorOld = tdDeltaOld * ( xX - xLeft );
+      tdCursorOld /= ( xRight - xLeft );
+
+      dtCursor =  m_vpDataViewVisual.dtBegin + tdCursorOld;
+
+      if ( 0 > rotation ) { // expand width
+
+        tdDeltaNew = tdDeltaOld * 12;
+        tdDeltaNew /= 10;
+
+        tdCursorNew = tdDeltaNew * ( xX - xLeft );
+        tdCursorNew /= ( xRight - xLeft );
+
+        m_vpDataViewVisual.dtBegin = dtCursor - tdCursorNew;
+        m_vpDataViewVisual.dtEnd   = m_vpDataViewVisual.dtBegin + tdDeltaNew;
+
+        if ( m_vpDataViewVisual.dtBegin < m_vpDataViewExtents.dtBegin ) {
+          m_vpDataViewVisual.dtBegin = m_vpDataViewExtents.dtBegin;
+          if ( m_vpDataViewVisual.dtBegin >= m_vpDataViewVisual.dtEnd ) {
+            m_vpDataViewVisual.dtEnd = m_vpDataViewVisual.dtBegin + tdDeltaNew;
+          }
+        }
+
+        if ( m_vpDataViewVisual.dtEnd >= m_vpDataViewExtents.dtEnd ) {
+          //m_state = m_bSim ? EState::sim_trail : EState::live_trail;
+          m_vpDataViewVisual = ViewPort_t( m_vpDataViewExtents.dtEnd - tdDeltaNew, m_vpDataViewExtents.dtEnd );
+        }
+
+        assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+        tdDeltaNew = m_vpDataViewVisual.dtEnd - m_vpDataViewVisual.dtBegin;
+
+      }
+      else { // reduce width
+
+        tdDeltaNew = tdDeltaOld * 10;
+        tdDeltaNew /= 12;
+
+        if ( tdDeltaNew < tdTenSeconds ) tdDeltaNew = tdTenSeconds;
+
+        tdCursorNew = tdDeltaNew * ( xX - xLeft );
+        tdCursorNew /= ( xRight - xLeft );
+
+        m_vpDataViewVisual.dtBegin = dtCursor - tdCursorNew;
+        m_vpDataViewVisual.dtEnd   = m_vpDataViewVisual.dtBegin + tdDeltaNew;
+
+        assert ( m_vpDataViewVisual.dtBegin <= m_vpDataViewVisual.dtEnd );
+
+        if ( m_vpDataViewVisual.dtEnd < m_vpDataViewExtents.dtEnd ) {
+          //m_state = m_bSim ? EState::sim_review : EState::live_review;
+        }
+
+      }
+
+      m_tdViewPortWidth = tdDeltaNew;
+
+      //boost::posix_time::time_duration td( dtCursor.time_of_day() );
+      //std::string sTime = boost::posix_time::to_simple_string( td );
+      std::string sDT = boost::posix_time::to_simple_string( dtCursor );
+      m_chartMaster.SetCrossHairTime( sDT );
+      m_pChartDataView->NotifyCursorDateTime( dtCursor );
+
+      DrawChart();
+    }
+
+  }
+  else {
+    assert( true ); // test point
+  }
+
+  event.Skip();
+}
+
+void WinChartView::HandleMouseEnter( wxMouseEvent& event ) {
+  //std::cout << "mouse enter" << std::endl;
+  m_chartMaster.CrossHairDraw( true );
+  event.Skip();
+}
+
+void WinChartView::HandleMouseLeave( wxMouseEvent& event ) {
+  //std::cout << "mouse leave" << std::endl;
+  m_chartMaster.CrossHairDraw( false );
+  event.Skip();
 }
 
 void WinChartView::HandlePaint( wxPaintEvent& event ) {
   if ( 0 != m_pChartBitmap.use_count() ) {
     wxPaintDC dc( this );
-    dc.DrawBitmap( *m_pChartBitmap.get(), 0, 0);
+    dc.DrawBitmap( *m_pChartBitmap.get(), 0, 0 );
   }
 }
 
-// placeholder for unused code
-void WinChartView::ManualDraw( void ) {
-  
-// ====  
-  if ( 0 != m_pChartDataView ) {
-    try {
-      //m_bPaintingChart = true;
-      wxSize size = this->GetClientSize();
-      m_chartMaster.SetChartDimensions( size.GetWidth(), size.GetHeight() );
-      // turn this into a lambda instead
-      m_chartMaster.SetOnDrawChart( MakeDelegate( this, &WinChartView::HandleDrawChart ) );
-      m_chartMaster.DrawChart( );
-    }
-    catch (...) {
-    }
-  }
-  //m_bPaintingChart = false;
-}
-
-
-void WinChartView::HandleSize( wxSizeEvent& event ) { 
+void WinChartView::HandleSize( wxSizeEvent& event ) {
   // let the timer do the refresh instead?
   //this->RefreshRect( this->GetClientRect(), false );
   DrawChart();
@@ -153,95 +448,168 @@ void WinChartView::HandleGuiRefresh( wxTimerEvent& event ) {
   DrawChart();
 }
 
-void WinChartView::DrawChart( void ) {
-  if ( m_bThreadDrawChartActive ) {
-    m_bInDrawChart = true;
-    m_cvThreadDrawChart.notify_one();
+void WinChartView::Set( EView state ) {
+  switch ( state ) {
+    case EView::live_trail:
+      SetLive_trail();
+      break;
+    case EView::live_review:
+      SetLive_trail();
+      break;
+    case EView::sim_review:
+      SetSim_review();
+      break;
+    case EView::sim_trail:
+      SetSim_trail();
+      break;
   }
 }
 
-// could change this into a worker future/promise solution, or use asio to submit jobs or packages
-void WinChartView::ThreadDrawChart1( void ) {
-  m_bThreadDrawChartActive = true;
-  boost::unique_lock<boost::mutex> lock(m_mutexThreadDrawChart);
-  while ( m_bThreadDrawChartActive ) {
-    m_cvThreadDrawChart.wait( lock );
+void WinChartView::SetLive_trail() {
+  m_bSim = false;
+  m_stateView = EView::live_trail;
+}
 
-    if ( m_bThreadDrawChartActive ) {  // exit thread if false without doing anything
-      // need to deal with market closing time frame on expiry friday, no further calcs after market close on that day
-      boost::posix_time::ptime now = ou::TimeSource::Instance().External();
+void WinChartView::SetLive_review() {
+  m_bSim = false;
+  m_stateView = EView::live_review;
+}
 
-      static boost::posix_time::time_duration::fractional_seconds_type fs( 1 );
-      boost::posix_time::time_duration td( 0, 0, 0, fs - now.time_of_day().fractional_seconds() );
-      boost::posix_time::ptime dtEnd = now + td; 
+void WinChartView::SetSim_review() {
+  m_bSim = true;
+  m_stateView = EView::sim_review;
+}
 
-      boost::posix_time::ptime dtBegin = dtEnd - m_tdViewPortWidth;
+void WinChartView::SetSim_trail() {
+  m_bSim = true;
+  m_stateView = EView::sim_trail;
+}
 
-      std::stringstream ss;
-      ss << dtBegin << "," << m_tdViewPortWidth << "," << dtEnd;
+// TODO: there may be an issue with cursor & no data, which locks up the gui
+void WinChartView::DrawChart() {
+  if ( m_threadDrawChart.joinable() ) {
 
-      m_pChartDataView->SetViewPort( dtBegin, dtEnd );
-      m_pChartDataView->SetThreadSafe( true );
+    if ( m_pChartDataView ) {
 
-      wxSize size = this->GetClientSize();  // may not be able to do this cross thread
-      m_chartMaster.SetChartDimensions( size.GetWidth(), size.GetHeight() );
-      m_chartMaster.SetChartDataView( m_pChartDataView );
-      // could use lambda instead here
-      m_chartMaster.SetOnDrawChart( MakeDelegate( this, &WinChartView::ThreadDrawChart2 ) );  // this line could be factored out?
-      m_chartMaster.DrawChart( );
+      if ( !m_bInDrawChart ) {
+
+        std::scoped_lock<std::mutex> lock( m_mutexChartDataView );
+        if ( !m_bInDrawChart ) {
+          m_bInDrawChart = true;
+
+          boost::asio::post(
+            m_context,
+            [this](){
+              std::scoped_lock<std::mutex> lock( m_mutexChartDataView );
+
+              static const boost::posix_time::time_duration one_sec( 0, 0, 1 ); // provide a border
+
+              m_vpDataViewExtents = m_pChartDataView->GetExtents(); // TODO: obtain just end extent?
+
+              switch ( m_stateView ) {
+                case EView::live_trail:
+                  m_vpDataViewVisual.dtEnd = ou::TimeSource::GlobalInstance().Internal() + one_sec; // works with real vs simulation time
+                  m_vpDataViewVisual.dtBegin = m_vpDataViewVisual.dtEnd - m_tdViewPortWidth;
+                  break;
+                case EView::live_review:
+                case EView::sim_review:
+                  // handle case when data loaded in background, ultimately extents will be available
+                  if ( m_vpDataViewVisual.HasBoth() ) {}
+                  else {
+                    if ( m_vpDataViewExtents.HasBoth() ) {
+                      m_vpDataViewVisual = m_vpDataViewExtents;
+                    }
+                  }
+                  break;
+                case EView::sim_trail:
+                  m_vpDataViewVisual = ViewPort_t( m_vpDataViewExtents.dtEnd - m_tdViewPortWidth, m_vpDataViewExtents.dtEnd + one_sec );
+                  break;
+              }
+
+              //std::cout << "SetViewPort: " << m_vpDataViewVisual.dtBegin << " - " << m_vpDataViewVisual.dtEnd << std::endl;
+              m_pChartDataView->SetViewPort( m_vpDataViewVisual );
+
+              UpdateChartMaster();  // PROBLEM in lock 1
+
+              m_bInDrawChart = false;
+            });
+        }
+      }
     }
   }
 }
 
-// background thread to draw composed chart into memory, and send to gui thread 
-void WinChartView::ThreadDrawChart2( const MemBlock& m ) {
-  wxMemoryInputStream in( m.data, m.len );  // need this
-  pwxBitmap_t p( new wxBitmap( wxImage( in, wxBITMAP_TYPE_BMP) ) ); // and need this to keep the drawn bitmap, then memblock can be reclaimed
-  QueueEvent( new EventDrawChart( EVENT_DRAW_CHART, -1, p ) ); // which will invoke HandleGuiDrawChart
+void WinChartView::UpdateChartMaster() { // in worker thread with DrawChart started post
+
+  wxSize size = this->GetClientSize();  // may not be able to do this cross thread
+  m_chartMaster.SetChartDataView( m_pChartDataView );
+  m_chartMaster.SetChartDimensions( size.GetWidth(), size.GetHeight() );
+
+  m_chartMaster.SetOnDrawChart(
+    [this]( bool bCursor, const MemBlock& m ){ // in background thread to draw composed chart into memory, and send to gui thread
+      wxMemoryInputStream in( m.data, m.len );  // need this
+      pwxBitmap_t p( new wxBitmap( wxImage( in, wxBITMAP_TYPE_BMP) ) ); // and need this to keep the drawn bitmap, then memblock can be reclaimed
+
+      CallAfter([this,p,bCursor](){ // perform draw in gui thread
+        if ( 0 != m_pChartBitmap.use_count() ) m_pChartBitmap.reset();
+        m_pChartBitmap = p;  //  bit map remains for use in HandlePaint
+        wxClientDC dc( this );
+        dc.DrawBitmap( *m_pChartBitmap, 0, 0);
+
+        if ( bCursor ) {
+          SetCursor( wxStockCursor( wxCURSOR_ARROW ) );
+        }
+        else {
+          SetCursor( wxStockCursor( wxCURSOR_BLANK ) );
+        }
+
+      });
+    });
+
+  m_chartMaster.DrawChart();   // PROBLEM in lock 2
 }
 
-// triggered by ThreadDrawChart2
-// event in gui thread to draw on display from memory, bit map remains for use in HandlePaint
-void WinChartView::HandleGuiDrawChart( EventDrawChart& event ) {
-  if ( 0 != m_pChartBitmap.use_count() ) m_pChartBitmap.reset();
-  m_pChartBitmap = event.GetBitmap();
-  wxClientDC dc( this );
-  dc.DrawBitmap( *m_pChartBitmap, 0, 0);
-  m_bInDrawChart = false;
-}
+void WinChartView::UnbindEvents() {
 
-// this is superceded by ThreadDrawChart2/HandleGuiDrawChart when crossing threads
-// http://www.chartdir.com/forum/download_thread.php?bn=chartdir_support&thread=1144757575#N1144760096
-void WinChartView::HandleDrawChart( const MemBlock& m ) {
-  wxMemoryInputStream in( m.data, m.len );
-  wxBitmap bmp( wxImage( in, wxBITMAP_TYPE_BMP) );
-  wxPaintDC cdc( this );  // can only be used inside of paint, use ClientDC otherwise
-  cdc.DrawBitmap(bmp, 0, 0);
-}
-
-void WinChartView::StopThread( void ) {
-  m_bThreadDrawChartActive = false;
-  m_cvThreadDrawChart.notify_one();
-  m_pThreadDrawChart->join();
-  delete m_pThreadDrawChart;
-  m_pThreadDrawChart = 0;
-}
-
-void WinChartView::OnClose( wxCloseEvent& event ) {
-  // Exit Steps: #2 -> FrameMain::OnClose
-//  if ( 0 != OnPanelClosing ) OnPanelClosing();
-  // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
-  
   m_timerGuiRefresh.Stop();
-  this->Unbind( EVENT_DRAW_CHART, &WinChartView::HandleGuiDrawChart, this );
-  
-  StopThread();
-  
-  m_pChartBitmap.reset();
-  
+
+  SetChartDataView( nullptr );
+
+  assert( Unbind( wxEVT_TIMER, &WinChartView::HandleGuiRefresh, this, m_timerGuiRefresh.GetId() ) );
+
+  assert( Unbind( wxEVT_PAINT, &WinChartView::HandlePaint, this, this->GetId() ) );
+  assert( Unbind( wxEVT_SIZE, &WinChartView::HandleSize, this, this->GetId() ) );
+
+  assert( Unbind( wxEVT_MOTION, &WinChartView::HandleMouseMotion, this, this->GetId() ) );
+  assert( Unbind( wxEVT_MOUSEWHEEL, &WinChartView::HandleMouseWheel, this, this->GetId() ) );
+
+  assert( Unbind( wxEVT_ENTER_WINDOW, &WinChartView::HandleMouseEnter, this, this->GetId() ) );
+  assert( Unbind( wxEVT_LEAVE_WINDOW, &WinChartView::HandleMouseLeave, this, this->GetId() ) );
+
+  assert( Unbind( wxEVT_LEFT_DOWN, &WinChartView::HandleMouseLeftDown, this, this->GetId() ) );
+  assert( Unbind( wxEVT_LEFT_UP,   &WinChartView::HandleMouseLeftUp,   this, this->GetId() ) );
+
+  assert( Unbind( wxEVT_RIGHT_DOWN, &WinChartView::HandleMouseRightDown, this, this->GetId() ) );
+  assert( Unbind( wxEVT_RIGHT_UP,   &WinChartView::HandleMouseRightUp,   this, this->GetId() ) );
+
+  assert( Unbind( wxEVT_DESTROY, &WinChartView::OnDestroy, this, this->GetId() ) );
+
+}
+
+void WinChartView::OnDestroy( wxWindowDestroyEvent& event ) {
+
+  UnbindEvents();
+
+  m_pWork.reset();
+  if ( m_threadDrawChart.joinable() ) {
+    m_threadDrawChart.join(); // to end
+  }
+
   event.Skip();  // auto followed by Destroy();
 }
+
+// crossing threads
+// http://www.chartdir.com/forum/download_thread.php?bn=chartdir_support&thread=1144757575#N1144760096
 
 } // namespace tf
 } // namespace ou

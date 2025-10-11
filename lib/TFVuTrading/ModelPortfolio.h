@@ -13,7 +13,6 @@
 
 #pragma once
 
-#include <map>
 #include <set>
 
 #include <TFTrading/PortfolioManager.h>
@@ -23,27 +22,32 @@
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
+// the model is designed for a table view
+
 class ModelPortfolio: public ModelBase<ModelPortfolio> {
 public:
 
-  typedef ou::tf::PortfolioManager PortfolioManager;
-  typedef PortfolioManager::idPortfolio_t idPortfolio_t;
-  typedef PortfolioManager::pPortfolio_t pPortfolio_t;
+  using PortfolioManager = ou::tf::PortfolioManager;
+  using idPortfolio_t = PortfolioManager::idPortfolio_t;
+  using pPortfolio_t = PortfolioManager::pPortfolio_t;
 
   struct DataViewItemPortfolio: public DataViewItem<pPortfolio_t::element_type> {
     DataViewItemPortfolio( shared_ptr& ptr )
-      : DataViewItem<pPortfolio_t::element_type>( ptr ) { ixType = ePortfolio; };
-    void AssignFirstColumn( wxVariant& variant ) const {
-      variant = m_ptr->GetRow().idPortfolio;
+      : DataViewItem<pPortfolio_t::element_type>( EMTPortfolio, ptr ) {};
+    DataViewItemPortfolio( EModelType eModelType, shared_ptr& ptr )
+      : DataViewItem<pPortfolio_t::element_type>( eModelType, ptr ) {};
+    virtual void AssignFirstColumn( wxVariant& variant ) /* const */ {
+      variant = GetPtr()->GetRow().idPortfolio;
     }
   };
 
-  typedef std::map<void*,DataViewItemPortfolio*> mapItems_t;
+  struct wxDataViewItem_Portfolio: public wxDataViewItem_typed<DataViewItemPortfolio> {};
+
+  using setItems_t = std::set<DataViewItemPortfolio*>;
 
   ModelPortfolio(void);
   ~ModelPortfolio(void);
 
-  //void AddPortfolioToModel( const idPortfolio_t& idPortfolio );
   void AddPortfolioToModel( DataViewItemPortfolio* );
   void ClearItems( void );
 
@@ -51,11 +55,15 @@ protected:
 private:
 
 //  typedef std::map<idPortfolio_t, DataViewItemPortfolio> mapItems_t;
-  typedef mapItems_t::const_iterator mapItems_citer_t;
-  mapItems_t m_mapItems;
+  //typedef mapItems_t::const_iterator mapItems_citer_t;
+  using setItems_citer_t = setItems_t::const_iterator;
+  setItems_t m_setItems;
 
-  unsigned int GetChildren(	const wxDataViewItem& item, wxDataViewItemArray& children	) const;
-  void GetValue( wxVariant& variant, const wxDataViewItem& item, unsigned int col	) const;
+  // refactor this to the inherited class
+  virtual bool IsContainer( const wxDataViewItem& item ) const;
+  virtual wxDataViewItem GetParent( const wxDataViewItem& item ) const;
+  virtual unsigned int GetChildren( const wxDataViewItem& item, wxDataViewItemArray& children ) const;
+  virtual void GetValue( wxVariant& variant, const wxDataViewItem& item, unsigned int col ) const;
 
   PortfolioManager& m_mgrPortfolio;  // database must be open before processing portfolios
 

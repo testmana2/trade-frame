@@ -17,18 +17,16 @@
 
 #include <map>
 
-#include <boost/smart_ptr.hpp>
-
 #include <OUCommon/Delegate.h>
 
 #include <TFTrading/PortfolioManager.h>
-#include <TFTrading/NoRiskInterestRateSeries.h>
 #include <TFTrading/Watch.h>
 
 #include <TFTimeSeries/BarFactory.h>
 
 #include <TFIQFeed/MarketSymbol.h>
 
+#include "NoRiskInterestRateSeries.h"
 #include "Binomial.h"
 #include "Strike.h"
 
@@ -51,12 +49,15 @@ public:
   ou::Delegate<ou::tf::option::Strike&> OnStrikeWatchOn;
   ou::Delegate<ou::tf::option::Strike&> OnStrikeWatchOff;
 
-  typedef FastDelegate1<const ou::tf::PriceIV&> OnAtmIvCalc_t;
-  ou::Delegate<const ou::tf::PriceIV&> OnAtmIvCalc;
+  typedef FastDelegate1<const ou::tf::PriceIVExpiry&> OnAtmIvCalc_t;
+  ou::Delegate<const ou::tf::PriceIVExpiry&> OnAtmIvCalc;
 
 //  void SetUnderlying( pInstrument_t pInstrument, pProvider_t pProvider );
   void SetCall( pInstrument_t pInstrument, pProvider_t pDataProvider, pProvider_t pGreekProvider );
   void SetPut( pInstrument_t pInstrument, pProvider_t pDataProvider, pProvider_t pGreekProvider );
+
+  void SetCall( pInstrument_t pInstrument, pProvider_t pDataProvider );
+  void SetPut( pInstrument_t pInstrument, pProvider_t pDataProvider );
 
   Call* GetCall( double dblStrike );
   Put* GetPut( double dblStrike );
@@ -72,10 +73,10 @@ public:
   void SetWatchOff( double dblStrike, bool bForce = false ); // forces watchable off when true
 
   void StartWatch( void ); // watch underlying plus all watchable options
-  void StopWatch( void ); 
+  void StopWatch( void );
 
   void SaveSeries( const std::string& sPrefix60sec, const std::string& sPrefix86400sec );
-  void EmitValues( void );
+  void EmitValues( double dblPriceUnderlying );
 
   void SetExpiry( ptime dt ); // utc
 
@@ -94,7 +95,7 @@ private:
   double m_dblUpperTrigger;
   double m_dblLowerTrigger;
 
-  ou::tf::PriceIVs m_tsAtmIv;
+  ou::tf::PriceIVExpirys m_tsAtmIv;
   ou::tf::BarFactory m_bfIVUnderlyingCall;
   ou::tf::BarFactory m_bfIVUnderlyingPut;
 
@@ -107,7 +108,7 @@ private:
   mapStrikes_iter_t FindStrike( double strike );
   mapStrikes_iter_t FindStrikeAuto( double strike ); // Auto insert new strike
 
-  void RecalcATMWatch( double dblValue );  
+  void RecalcATMWatch( double dblValue );
   void CalcGreeksAtStrike( ptime now, mapStrikes_iter_t iter, ou::tf::option::binomial::structInput& input );
 
   void SaveAtmIv( const std::string& sPrefix, const std::string& sPrefix86400Min );
@@ -120,8 +121,8 @@ std::ostream& operator<<( std::ostream& os, const ExpiryBundle& );
 class ExpiryBundleWithUnderlying: public ExpiryBundle {
 public:
 
-  ExpiryBundleWithUnderlying( void );
-  ~ExpiryBundleWithUnderlying( void );
+  ExpiryBundleWithUnderlying();
+  ~ExpiryBundleWithUnderlying();
 
   typedef Instrument::pInstrument_t pInstrument_t;
   typedef ou::tf::ProviderInterfaceBase::pProvider_t pProvider_t;
@@ -129,9 +130,9 @@ public:
 
   void SetUnderlying( pInstrument_t pInstrument, pProvider_t pProvider );
 
-  void StartWatch( void );
-  void StopWatch( void );
-  void EmitValues( void );
+  void StartWatch();
+  void StopWatch();
+  void EmitValues();
 
   void SaveSeries( const std::string& sPrefix60sec, const std::string& sPrefix86400sec );
 
@@ -173,7 +174,7 @@ public:
   void CalcIV( ptime dtNow /*utc*/, ou::tf::LiborFromIQFeed& libor );
   void SaveData( const std::string& sPrefixSession, const std::string& sPrefix86400sec );
   void AssignOption( pInstrument_t pInstrument, pProvider_t pDataProvider, pProvider_t pGreekProvider );
-  
+
   void AddOnStrikeWatchOn( ExpiryBundle::OnStrikeWatch_t );
   void RemoveOnStrikeWatchOn( ExpiryBundle::OnStrikeWatch_t );
   void AddOnStrikeWatchOff( ExpiryBundle::OnStrikeWatch_t );
@@ -211,17 +212,17 @@ struct PopulateMultiExpiryBundle {
   typedef ou::tf::Instrument::pInstrument_t pInstrument_t;
   typedef ou::tf::ProviderInterfaceBase::pProvider_t pProvider_t;
 
-  PopulateMultiExpiryBundle( 
+  PopulateMultiExpiryBundle(
     ou::tf::option::MultiExpiryBundle& bundle, pProvider_t pDataProvider_, pProvider_t pGreekProvider_ )
     : meb( bundle ), pDataProvider( pDataProvider_ ), pGreekProvider( pGreekProvider_ )
   {}
 
   void operator()( const ou::tf::iqfeed::MarketSymbol::TableRowDef& trd ) {
     //assert( trd.sUnderlying == meb.Name() );
-    assert( ( ou::tf::iqfeed::MarketSymbol::IEOption == trd.sc )
-         || ( ou::tf::iqfeed::MarketSymbol::FOption == trd.sc )
+    assert( ( ou::tf::iqfeed::ESecurityType::IEOption == trd.sc )
+         || ( ou::tf::iqfeed::ESecurityType::FOption == trd.sc )
       );
-    
+
     // to trade, when is the IB contract number acquired?
     // and when does the symbol get registered, so it can be traded?
 
@@ -235,20 +236,20 @@ struct PopulateMultiExpiryBundle {
       std::stringstream ss;
       ss << trd.sUnderlying << " " << dateTrdExpiry << " " << side << " " << trd.dblStrike;
       switch ( trd.sc ) {
-      case ou::tf::iqfeed::MarketSymbol::IEOption:
-        pInstrument.reset( 
-          new ou::tf::Instrument( 
-            ss.str(), ou::tf::InstrumentType::Option, "SMART", 
-            dateTrdExpiry.year(), dateTrdExpiry.month(), dateTrdExpiry.day(), 
-//            meb.GetWatchUnderlying()->GetInstrument(), 
+      case ou::tf::iqfeed::ESecurityType::IEOption:
+        pInstrument.reset(
+          new ou::tf::Instrument(
+            ss.str(), ou::tf::InstrumentType::Option, "SMART",
+            dateTrdExpiry.year(), dateTrdExpiry.month(), dateTrdExpiry.day(),
+//            meb.GetWatchUnderlying()->GetInstrument(),
 	    trd.eOptionSide, trd.dblStrike ) );
         break;
-      case ou::tf::iqfeed::MarketSymbol::FOption:
-        pInstrument.reset( 
-          new ou::tf::Instrument( 
-            ss.str(), ou::tf::InstrumentType::FuturesOption, "SMART", 
-            dateTrdExpiry.year(), dateTrdExpiry.month(), dateTrdExpiry.day(), 
-//            meb.GetWatchUnderlying()->GetInstrument(), 
+      case ou::tf::iqfeed::ESecurityType::FOption:
+        pInstrument.reset(
+          new ou::tf::Instrument(
+            ss.str(), ou::tf::InstrumentType::FuturesOption, "SMART",
+            dateTrdExpiry.year(), dateTrdExpiry.month(), dateTrdExpiry.day(),
+//            meb.GetWatchUnderlying()->GetInstrument(),
 	    trd.eOptionSide, trd.dblStrike ) );
         break;
       }

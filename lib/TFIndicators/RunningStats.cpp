@@ -12,99 +12,117 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
-#include "math.h"
+#include <cmath>
 
 #include "RunningStats.h"
+
+// TODO: incorporate:
+// https://stats.stackexchange.com/questions/111851/standard-deviation-of-an-exponentially-weighted-mean
+// http://people.ds.cam.ac.uk/fanf2/hermes/doc/antiforgery/stats.pdf - no longer available
+// https://fanf2.user.srcf.net/hermes/doc/antiforgery/stats.pdf - available here
+// implemented in BasketTrading::ManageStrategy - to be refactored
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-RunningStats::RunningStats(void) : 
-  /*b2( 0 ),*/ b1( 0 ), b0( 0 ), 
-  SumXX( 0 ), SumX( 0 ), SumXY( 0 ), SumY( 0 ), SumYY( 0 ),
-  rr( 0 ), r( 0 ), meanY( 0 ), sd( 0 ),
-  nX( 0 ), m_BBMultiplier( 2.0 )
-{
+RunningStats::RunningStats()
+: m_SumXX {}, m_SumX {}, m_SumXY {}, m_SumY {}, m_SumYY {}
+, m_nX( 0 ), m_BBMultiplier( 2.0 )
+{}
+
+RunningStats::RunningStats( double BBMultiplier )
+: m_SumXX {}, m_SumX {}, m_SumXY {}, m_SumY {}, m_SumYY {}
+, m_nX{}, m_BBMultiplier( BBMultiplier )
+{}
+
+RunningStats::RunningStats( const RunningStats& rhs )
+:
+  m_stats( rhs.m_stats )
+, m_SumXX( rhs.m_SumXX ), m_SumX( rhs.m_SumX )
+, m_SumYY( rhs.m_SumYY ), m_SumY( rhs.m_SumY )
+, m_SumXY( rhs.m_SumXY )
+, m_nX( rhs.m_nX )
+, m_BBMultiplier( rhs.m_BBMultiplier )
+{}
+
+
+RunningStats::RunningStats( const RunningStats&& rhs )
+:
+  m_stats( rhs.m_stats )
+, m_SumXX( rhs.m_SumXX ), m_SumX( rhs.m_SumX )
+, m_SumYY( rhs.m_SumYY ), m_SumY( rhs.m_SumY )
+, m_SumXY( rhs.m_SumXY )
+, m_nX( rhs.m_nX )
+, m_BBMultiplier( rhs.m_BBMultiplier )
+{}
+
+
+RunningStats::~RunningStats() {
 }
 
-RunningStats::RunningStats( double BBMultiplier ) : 
-  /*b2( 0 ),*/ b1( 0 ), b0( 0 ), 
-  SumXX( 0 ), SumX( 0 ), SumXY( 0 ), SumY( 0 ), SumYY( 0 ),
-  rr( 0 ), r( 0 ), meanY( 0 ), sd( 0 ),
-  nX( 0 ), m_BBMultiplier( BBMultiplier )
-{
+void RunningStats::Reset() {
+  /*b2 = */
+    m_stats.Reset();
+    m_nX = 0;
+    m_SumXX = m_SumX = m_SumXY = m_SumY = m_SumYY = 0.0;
 }
 
-RunningStats::~RunningStats(void) {
+void RunningStats::Add( double x, double y ) {
+  m_SumXX += x * x;
+  m_SumX += x;
+  m_SumXY += x * y;
+  m_SumY += y;
+  m_SumYY += y * y;
+  m_nX++;
 }
 
-void RunningStats::Reset( void ) {
-  /*b2 = */ b1 = b0 
-    = meanY 
-    = rr = r 
-    = sd /*= bbUpper = bbLower */
-    = nX = nY 
-    = SumXX = SumX = SumXY = SumY = SumYY = 0;
-}
-
-void RunningStats::Add(double x, double y) {
-  SumXX += x * x;
-  SumX += x;
-  SumXY += x * y;
-  SumY += y;
-  SumYY += y * y;
-  nX++;
-}
-
-void RunningStats::Remove(double x, double y) {
-  SumXX -= x * x;
-  SumX -= x;
-  SumXY -= x * y;
-  SumY -= y;
-  SumYY -= y * y;
-  nX--;
+void RunningStats::Remove( double x, double y ) {
+  m_SumXX -= x * x;
+  m_SumX -= x;
+  m_SumXY -= x * y;
+  m_SumY -= y;
+  m_SumYY -= y * y;
+  m_nX--;
 }
 
 void RunningStats::CalcStats() {
+  CalcStats( m_stats );
+}
 
-  if ( 0 == nX ) {
-    SumXX = SumX = 0;
-    SumXY = 0;
-    SumY = SumYY = 0;
-    r = rr = 0;
-    sd = meanY = b1 = b0 = 0;
+void RunningStats::CalcStats( linear::Stats& stats ) {
+
+  if ( 0 == m_nX ) {
+    m_SumXX = m_SumX = 0;
+    m_SumXY = 0;
+    m_SumY = m_SumYY = 0;
+    stats.Reset();
   }
   else {
 
-    double Sxx, Sxy, Syy;
-    double SST, SSR, SSE;
+    const double nX( m_nX );
 
-//    double oldb1 = b1;
+    const double Sxx = m_SumXX - ( m_SumX * m_SumX ) / nX;
+    const double Sxy = m_SumXY - ( m_SumX * m_SumY ) / nX;
+    const double Syy = m_SumYY - ( m_SumY * m_SumY ) / nX;
 
-    Sxx = SumXX - ( SumX * SumX ) / nX;
-    Sxy = SumXY - ( SumX * SumY ) / nX;
-    Syy = SumYY - ( SumY * SumY ) / nX;
+    const double SST = Syy;
+    const double SSR = ( Sxy * Sxy ) / Sxx;
+    const double SSE = SST - SSR;
 
-    SST = Syy;
-    SSR = ( Sxy * Sxy ) / Sxx;
-    SSE = SST - SSR;
+    stats.rr = SSR / SST;
+    stats.r = Sxy / std::sqrt( Sxx * Syy );
 
-    rr = SSR / SST;
-    r = Sxy / sqrt(Sxx * Syy);
+    stats.sd = std::sqrt( Syy / nX );
 
-    sd = sqrt(Syy / nX);
-
-    meanY = SumY / nX;
+    stats.meanY = m_SumY / nX;
 
 //    double BBOffset = m_BBMultiplier * sd;
 //    bbUpper = meanY + BBOffset;
 //    bbLower = meanY - BBOffset;
 
-    b1 = ( nX > 1 ) ? Sxy / Sxx : 0;
-    b0 = (1 / nX) * ( SumY - b1 * SumX );
-//    b2 = b1 - oldb1;  // *** do this differently
+    stats.b1 = ( nX > 1 ) ? Sxy / Sxx : 0.0;
+    stats.b0 = ( m_SumY - stats.b1 * m_SumX ) / nX;
+//    b2 = b1 - oldb1;  // TODO: do this differently
   }
 }
 

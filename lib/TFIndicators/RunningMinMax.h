@@ -15,33 +15,104 @@
 #pragma once
 
 #include <map>
+#include <stdexcept>
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
+template<typename CRTP, typename value_t>
 class RunningMinMax {
 public:
 
-  RunningMinMax(void);
+  RunningMinMax();
   RunningMinMax( const RunningMinMax& );
-  virtual ~RunningMinMax(void);
+  RunningMinMax( RunningMinMax&& );
+  virtual ~RunningMinMax();
 
-  virtual void Add( double );
-  virtual void Remove( double );
+  void Add( const value_t& );
+  void Remove( const value_t& );
 
-  double Min() const { return m_dblMin; };
-  double Max() const { return m_dblMax; };
+  value_t Min() const {
+    if ( 0 == m_mapValueCount.size() ) throw std::runtime_error( "no value available" );
+    return m_mapValueCount.begin()->first;
+  };
+  value_t Max() const {
+    if ( 0 == m_mapValueCount.size() ) throw std::runtime_error( "no value available" );
+    return m_mapValueCount.rbegin()->first;
+  };
 
-  void Reset( void );
+  void Reset();
 
 protected:
-  typedef std::map<double,unsigned int> map_t;
-  map_t m_mapPointStats;
-  typedef std::pair<double, unsigned int> m_mapPointStats_pair_t;
+  void UpdateOnAdd( const value_t min, const value_t max ) {} // CRTP callback
+  void UpdateOnDel( const value_t min, const value_t max ) {} // CRTP callback
 private:
-  double m_dblMax;
-  double m_dblMin;
+  using mapValueCount_t = std::map<value_t,unsigned int>;
+  mapValueCount_t m_mapValueCount;
 };
+
+template<typename CRTP, typename value_t>
+RunningMinMax<CRTP,value_t>::RunningMinMax() {}
+
+template<typename CRTP, typename value_t>
+RunningMinMax<CRTP,value_t>::RunningMinMax( const RunningMinMax& rhs )
+  : m_mapValueCount( rhs.m_mapValueCount )
+{
+}
+
+template<typename CRTP, typename value_t>
+RunningMinMax<CRTP,value_t>::RunningMinMax( RunningMinMax&& rhs )
+  : m_mapValueCount( std::move( rhs.m_mapValueCount ) )
+{
+}
+
+template<typename CRTP, typename value_t>
+RunningMinMax<CRTP,value_t>::~RunningMinMax() {
+  m_mapValueCount.clear();
+}
+
+template<typename CRTP, typename value_t>
+void RunningMinMax<CRTP,value_t>::Add(const value_t& value) {
+
+  typename mapValueCount_t::iterator iter = m_mapValueCount.find( value );
+  if ( m_mapValueCount.end() == iter ) {
+    m_mapValueCount.insert( typename mapValueCount_t::value_type( value, 1 ) );
+  }
+  else {
+    (iter->second)++;
+  }
+  if ( &RunningMinMax<CRTP,value_t>::UpdateOnAdd != &CRTP::UpdateOnAdd ) {
+    static_cast<CRTP*>(this)->UpdateOnAdd( m_mapValueCount.begin()->first, m_mapValueCount.rbegin()->first );
+  }
+
+}
+
+template<typename CRTP, typename value_t>
+void RunningMinMax<CRTP,value_t>::Remove( const value_t& value ) {
+
+  if ( &RunningMinMax<CRTP,value_t>::UpdateOnDel != &CRTP::UpdateOnDel ) {
+    static_cast<CRTP*>(this)->UpdateOnDel( m_mapValueCount.begin()->first, m_mapValueCount.rbegin()->first );
+  }
+
+  typename mapValueCount_t::iterator iter = m_mapValueCount.find( value );
+  if ( (m_mapValueCount.end() == iter) ) {
+    int i = 1;  // shouldn't land here, a bug if we do
+  }
+  else {
+    (iter->second)--;
+    if ( 0 == iter->second ) {
+      m_mapValueCount.erase( iter );
+      if ( !m_mapValueCount.empty() ) {
+
+      }
+    }
+  }
+}
+
+template<typename CRTP, typename value_t>
+void RunningMinMax<CRTP,value_t>::Reset() {
+  m_mapValueCount.clear();
+}
 
 } // namespace tf
 } // namespace ou

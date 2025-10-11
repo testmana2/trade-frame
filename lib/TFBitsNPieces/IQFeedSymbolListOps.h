@@ -19,6 +19,7 @@
 #include <string>
 
 #include <boost/atomic.hpp>
+#include <boost/signals2.hpp>
 
 #include <OUCommon/Worker.h>
 
@@ -30,11 +31,11 @@ namespace tf { // TradeFrame
 class IQFeedSymbolListOps {
 public:
 
-  typedef std::set<std::string> vExchanges_t;
-  typedef std::set<std::string> vSymbolList_t;
-  typedef ou::tf::iqfeed::MarketSymbol::enumSymbolClassifier classifier_t;
-  typedef std::set<classifier_t> vClassifiers_t;
-  typedef ou::tf::iqfeed::InMemoryMktSymbolList::trd_t trd_t;
+  using vExchanges_t = std::set<std::string>;
+  using vSymbolList_t = std::set<std::string>;
+  using classifier_t =  ou::tf::iqfeed::ESecurityType;
+  using vClassifiers_t = std::set<classifier_t>;
+  using trd_t = ou::tf::iqfeed::InMemoryMktSymbolList::trd_t;
 
   // used in conjuction with InMemoryMktSymbolList::SelectSymbolsByExchange
   // should this structure be here or in InMemoryMktSymbolList?
@@ -63,17 +64,28 @@ public:
     }
   };
 
+  typedef boost::signals2::signal<void( const std::string&)> signalStatus_t;
+  typedef signalStatus_t::slot_type slotStatus_t;
+
+  enum ECompletionCode { ccDone, ccSaved, ccCleared };
+
+  typedef boost::signals2::signal<void( ECompletionCode )> signalDone_t;
+  typedef signalDone_t::slot_type slotDone_t;
+
   IQFeedSymbolListOps( ou::tf::iqfeed::InMemoryMktSymbolList& );
   ~IQFeedSymbolListOps(void);
 
   bool Exists( const std::string& sName );
 
-  void ObtainNewIQFeedSymbolListRemote( void );
-  void ObtainNewIQFeedSymbolListLocal( void );
-  void LoadIQFeedSymbolList( void );
+  signalStatus_t Status;
+  signalDone_t Done;
+
+  void ObtainNewIQFeedSymbolListRemote();
+  void ObtainNewIQFeedSymbolListLocal();
+  void LoadIQFeedSymbolList();
   void SaveSymbolSubset( const std::string& sFileName, const ou::tf::iqfeed::InMemoryMktSymbolList& subset );  // sample
   void LoadSymbolSubset( const std::string& sFileName );  // sample
-  void ClearIQFeedSymbolList( void );
+  void ClearIQFeedSymbolList();
 
 protected:
 private:
@@ -82,9 +94,12 @@ private:
   ou::action::Worker m_worker;
   ou::tf::iqfeed::InMemoryMktSymbolList& m_listIQFeedSymbols;
 
-  void WorkerObtainNewIQFeedSymbolListRemote( void );
-  void WorkerObtainNewIQFeedSymbolListLocal( void );
-  void WorkerLoadIQFeedSymbolList( void );
+  void StatusBusy();
+  void StatusDone();
+
+  void WorkerObtainNewIQFeedSymbolListRemote();
+  void WorkerObtainNewIQFeedSymbolListLocal();
+  void WorkerLoadIQFeedSymbolList();
 };
 
 } // namespace tf

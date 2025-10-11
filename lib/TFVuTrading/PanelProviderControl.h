@@ -13,9 +13,11 @@
 
 #pragma once
 
+#include <boost/serialization/version.hpp>
+#include <boost/serialization/split_member.hpp>
+
 #include <wx/panel.h>
 #include <wx/checkbox.h>
-#include <wx/button.h>
 
 #include <OUCommon/FastDelegate.h>
 using namespace fastdelegate;
@@ -26,6 +28,9 @@ using namespace fastdelegate;
 // D2: data provider 2, could be ib, typically option info
 // X: execution provider, typically IB or Sim
 
+class wxButton;
+class wxCheckBox;
+
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
@@ -33,13 +38,19 @@ enum eProviderState_t { ProviderOff, ProviderGoingOn, ProviderOn, ProviderGoingO
 
 class UpdateProviderStatusEvent: public wxEvent {
 public:
+
   UpdateProviderStatusEvent( wxEventType eventType, eProviderState_t state )
-    : wxEvent( 0, eventType ), m_state( state ) {
+  : wxEvent( 0, eventType ), m_state( state ) {
   }
-  UpdateProviderStatusEvent( const UpdateProviderStatusEvent& event ): wxEvent( event ), m_state( event.m_state ) {};
-  ~UpdateProviderStatusEvent( void ) {};
-  UpdateProviderStatusEvent* Clone( void ) const { return new UpdateProviderStatusEvent( *this ); }
-  eProviderState_t GetState( void ) const { return m_state; };
+
+  UpdateProviderStatusEvent( const UpdateProviderStatusEvent& event )
+  : wxEvent( event ), m_state( event.m_state ) {};
+
+  ~UpdateProviderStatusEvent() {};
+
+  UpdateProviderStatusEvent* Clone() const { return new UpdateProviderStatusEvent( *this ); }
+  eProviderState_t GetState() const { return m_state; };
+
 protected:
 private:
   eProviderState_t m_state;
@@ -58,31 +69,31 @@ wxDECLARE_EVENT( EVT_ProviderSimulator, UpdateProviderStatusEvent );
 //#define SYMBOL_PANELPROVIDERCONTROL_SIZE wxSize(400, 300)
 #define SYMBOL_PANELPROVIDERCONTROL_SIZE wxDefaultSize
 
-class PanelProviderControl:  public wxPanel {
+class PanelProviderControl: public wxPanel {
+  friend class boost::serialization::access;
 public:
 
   enum Provider_t {
     EIQFeed, EIB, ESim
   };
 
-  PanelProviderControl(void);
-  PanelProviderControl( 
-    wxWindow* parent, 
-    wxWindowID id = SYMBOL_PANELPROVIDERCONTROL_IDNAME, 
-    const wxPoint& pos = SYMBOL_PANELPROVIDERCONTROL_POSITION, 
-    const wxSize& size = SYMBOL_PANELPROVIDERCONTROL_SIZE, 
+  PanelProviderControl();
+  PanelProviderControl(
+    wxWindow* parent,
+    wxWindowID id = SYMBOL_PANELPROVIDERCONTROL_IDNAME,
+    const wxPoint& pos = SYMBOL_PANELPROVIDERCONTROL_POSITION,
+    const wxSize& size = SYMBOL_PANELPROVIDERCONTROL_SIZE,
     long style = SYMBOL_PANELPROVIDERCONTROL_STYLE );
-  ~PanelProviderControl(void);
+  virtual ~PanelProviderControl();
 
-  bool Create( 
-    wxWindow* parent, 
-    wxWindowID id = SYMBOL_PANELPROVIDERCONTROL_IDNAME, 
-    const wxPoint& pos = SYMBOL_PANELPROVIDERCONTROL_POSITION, 
-    const wxSize& size = SYMBOL_PANELPROVIDERCONTROL_SIZE, 
+  bool Create(
+    wxWindow* parent,
+    wxWindowID id = SYMBOL_PANELPROVIDERCONTROL_IDNAME,
+    const wxPoint& pos = SYMBOL_PANELPROVIDERCONTROL_POSITION,
+    const wxSize& size = SYMBOL_PANELPROVIDERCONTROL_SIZE,
     long style = SYMBOL_PANELPROVIDERCONTROL_STYLE );
-  
-//  wxBitmap GetBitmapResource( const wxString& name );
-//  wxIcon GetIconResource( const wxString& name );
+
+  void SetProvider( Provider_t d1, Provider_t d2, Provider_t x );
 
   void SetIQFeedState( eProviderState_t state );
   void SetIBState( eProviderState_t state );
@@ -90,7 +101,7 @@ public:
 
   void QueueEvent( wxEvent* event ) { wxEvtHandler::QueueEvent( event ); };
 
-  typedef FastDelegate1<eProviderState_t> OnProviderStateChange_t;
+  using OnProviderStateChange_t = FastDelegate1<eProviderState_t>;
 
   void SetOnIBStateChangeHandler( OnProviderStateChange_t function ) {
     OnIBStateChange = function;
@@ -102,7 +113,7 @@ public:
     OnSimulatorStateChange = function;
   }
 
-  typedef FastDelegate1<Provider_t> OnProviderSelect_t;
+  using OnProviderSelect_t = FastDelegate1<Provider_t>;
 
   void SetOnProviderSelectD1Handler( OnProviderSelect_t function ) {
     OnProviderSelectD1 = function;
@@ -116,22 +127,17 @@ public:
     OnProviderSelectX = function;
   }
 
-  void SyncInitialState( void );
-
-  typedef FastDelegate0<> OnPanelClosing_t;
-  void SetOnPanelClosingHandler( OnPanelClosing_t function ) {
-    OnPanelClosing = function;
-  }
+  void SyncInitialState();
 
 protected:
 private:
 
-  enum { 
+  enum {
     ID_NULL=wxID_HIGHEST, ID_PANELPROVIDERCONTROL,
     wxID_BitmapIQfeed, ID_BtnIQFeed, wxID_LblIQFeed,
     wxID_BitmapInteractiveBrokers,ID_BtnInteractiveBrokers, wxID_LblInteractiveBrokers,
-    ID_CB_IQF_D1, ID_CB_IQF_D2, ID_CB_IQF_X, 
-    ID_CB_IB_D1, ID_CB_IB_D2, ID_CB_IB_X, 
+    ID_CB_IQF_D1, ID_CB_IQF_D2, ID_CB_IQF_X,
+    ID_CB_IB_D1, ID_CB_IB_D2, ID_CB_IB_X,
     ID_CB_SIM_D1, ID_CB_SIM_D2, ID_CB_SIM_X,
     wxID_BitmapSimulation, ID_BtnSimulation, wxID_LblSimulation
   };
@@ -163,22 +169,20 @@ private:
   OnProviderSelect_t OnProviderSelectD2;
   OnProviderSelect_t OnProviderSelectX;
 
-  OnPanelClosing_t OnPanelClosing;
-
   void SetState( wxButton* btn, eProviderState_t state );
 
-  void Init( void );
-  void CreateControls( void );
-  bool ShowToolTips( void ) { return true; };
+  void Init();
+  void CreateControls();
+  bool ShowToolTips() { return true; };
 
-  void ResetAllRadioData1( void );
-  void ResetAllRadioData2( void );
-  void ResetAllRadioExec( void );
+  void ResetAllRadioData1();
+  void ResetAllRadioData2();
+  void ResetAllRadioExec();
 
-  void EnableAllRadio( void );
-  void DisableAllRadio( void );
+  void EnableAllRadio();
+  void DisableAllRadio();
 
-  void UpdateProviderButtons( void );
+  void UpdateProviderButtons();
 
   void OnClose( wxCloseEvent& event );
 
@@ -191,7 +195,7 @@ private:
   void OnIQFeedState( UpdateProviderStatusEvent& event );
   void OnIBState( UpdateProviderStatusEvent& event );
   void OnSimulatorState( UpdateProviderStatusEvent& event );
-  
+
   void OnBtnD1IQFeed( wxCommandEvent& event );
   void OnBtnD2IQFeed( wxCommandEvent& event );
   void OnBtnXIQFeed( wxCommandEvent& event );
@@ -201,7 +205,49 @@ private:
   void OnBtnD1Sim( wxCommandEvent& event );
   void OnBtnD2Sim( wxCommandEvent& event );
   void OnBtnXSim( wxCommandEvent& event );
+
+  template<typename Archive>
+  void save( Archive& ar, const unsigned int version ) const {
+    ar & m_cbIQFeedD1->IsChecked();
+    ar & m_cbIQFeedD2->IsChecked();
+    ar & m_cbIQFeedX->IsChecked();
+
+    ar & m_cbIBD1->IsChecked();
+    ar & m_cbIBD2->IsChecked();
+    ar & m_cbIBX->IsChecked();
+
+    ar & m_cbSimD1->IsChecked();
+    ar & m_cbSimD2->IsChecked();
+    ar & m_cbSimX->IsChecked();
+  }
+
+  template<typename Archive>
+  void load( Archive& ar, const unsigned int version ) {
+
+    bool b;
+
+    ar & b; m_cbIQFeedD1->SetValue( b );
+    ar & b; m_cbIQFeedD2->SetValue( b );
+    ar & b; m_cbIQFeedX->SetValue( b );
+
+    ar & b; m_cbIBD1->SetValue( b );
+    ar & b; m_cbIBD2->SetValue( b );
+    ar & b; m_cbIBX->SetValue( b );
+
+    ar & b; m_cbSimD1->SetValue( b );
+    ar & b; m_cbSimD2->SetValue( b );
+    ar & b; m_cbSimX->SetValue( b );
+
+    SyncInitialState();
+
+  }
+
+  BOOST_SERIALIZATION_SPLIT_MEMBER()
+
 };
 
 } // namespace tf
 } // namespace ou
+
+BOOST_CLASS_VERSION(ou::tf::PanelProviderControl, 1)
+

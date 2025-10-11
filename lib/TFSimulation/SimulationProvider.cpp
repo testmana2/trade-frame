@@ -12,50 +12,55 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
-#include <stdexcept>
 #include <cassert>
+#include <stdexcept>
+
+#include <boost/log/trivial.hpp>
 
 #include <TFHDF5TimeSeries/HDF5DataManager.h>
-#include <TFTrading/KeyTypes.h>
 
-#include "SimulationProvider.h"
+#include <TFTrading/KeyTypes.h>
+#include <TFTrading/OrderManager.h>
+
+#include "MergeDatedDatums.hpp"
+#include "SimulationProvider.hpp"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-SimulationProvider::SimulationProvider(void)
-: ProviderInterface<SimulationProvider,SimulationSymbol>(), 
-  m_pMerge( 0 )
+SimulationProvider::SimulationProvider()
+: sim::SimulationInterface<SimulationProvider,SimulationSymbol>()
+, m_sHdf5FileName( HDF5DataManager::GetHdf5FileDefault() )
 {
   m_sName = "Simulator";
   m_nID = keytypes::EProviderSimulator;
 
   m_bProvidesQuotes = true;
+  m_bProvidesDepths = true;
   m_bProvidesTrades = true;
   m_bProvidesGreeks = true;
-  m_pProvidesBrokerInterface = true;
+  m_bProvidesBrokerInterface = true;
 }
 
-SimulationProvider::~SimulationProvider(void) {
-
-  if ( 0 != m_pMerge ) {
-    delete m_pMerge;
-    m_pMerge = NULL;
-  }
+SimulationProvider::~SimulationProvider() {
+  Reset();
 }
 
-void SimulationProvider::SetGroupDirectory( const std::string sGroupDirectory ) {
-  HDF5DataManager dm( HDF5DataManager::RO );
+void SimulationProvider::SetHdf5FileName( const std::string& sHdf5FileName ) {
+  assert( 0 < sHdf5FileName.size() );
+  m_sHdf5FileName = sHdf5FileName;
+}
+
+void SimulationProvider::SetGroupDirectory( const std::string& sGroupDirectory ) {
+  HDF5DataManager dm( HDF5DataManager::RO, m_sHdf5FileName );
   std::string s;
-  if( !dm.GroupExists( sGroupDirectory ) ) 
+  if( !dm.GroupExists( sGroupDirectory ) )
     throw std::invalid_argument( "Could not find: " + sGroupDirectory );
   s = sGroupDirectory + "/trades";
-  if( !dm.GroupExists( s ) ) 
+  if( !dm.GroupExists( s ) )
     throw std::invalid_argument( "Could not find: " + s );
   s = sGroupDirectory + "/quotes";
-  if( !dm.GroupExists( s ) ) 
+  if( !dm.GroupExists( s ) )
     throw std::invalid_argument( "Could not find: " + s );
   m_sGroupDirectory = sGroupDirectory;
 }
@@ -78,65 +83,10 @@ void SimulationProvider::Disconnect() {
   }
 }
 
-SimulationProvider::pSymbol_t SimulationProvider::NewCSymbol( SimulationSymbol::pInstrument_t pInstrument ) {
-  pSymbol_t pSymbol( new SimulationSymbol(pInstrument->GetInstrumentName(), pInstrument, m_sGroupDirectory) );
-  pSymbol->m_simExec.SetOnOrderFill( MakeDelegate( this, &SimulationProvider::HandleExecution ) );
-  pSymbol->m_simExec.SetOnCommission( MakeDelegate( this, &SimulationProvider::HandleCommission ) );
-  pSymbol->m_simExec.SetOnOrderCancelled( MakeDelegate( this, &SimulationProvider::HandleCancellation ) );
+SimulationProvider::pSymbol_t SimulationProvider::NewCSymbol( pInstrument_t pInstrument ) {
+  pSymbol_t pSymbol( new SimulationSymbol( pInstrument->GetInstrumentName( ID() ), pInstrument, m_sGroupDirectory, m_sHdf5FileName ) );
   inherited_t::AddCSymbol( pSymbol );
   return pSymbol;
-}
-
-void SimulationProvider::AddQuoteHandler( pInstrument_cref pInstrument, SimulationSymbol::quotehandler_t handler ) {
-  inherited_t::AddQuoteHandler( pInstrument, handler );
-  inherited_t::m_mapSymbols_t::iterator iter;
-  iter = m_mapSymbols.find( pInstrument->GetInstrumentName( m_nID ) );
-  assert( m_mapSymbols.end() != iter );
-  pSymbol_t pSymSymbol( iter->second );
-  if ( 1 == iter->second->GetQuoteHandlerCount() ) {
-    inherited_t::AddQuoteHandler( pInstrument, MakeDelegate( &pSymSymbol->m_simExec, &SimulateOrderExecution::NewQuote ) );
-  }
-}
-
-void SimulationProvider::RemoveQuoteHandler( pInstrument_cref pInstrument, SimulationSymbol::quotehandler_t handler ) {
-  inherited_t::RemoveQuoteHandler( pInstrument, handler );
-  inherited_t::m_mapSymbols_t::iterator iter;
-  iter = m_mapSymbols.find( pInstrument->GetInstrumentName( m_nID ) );
-  if ( m_mapSymbols.end() == iter ) {
-    assert( false );  // this shouldn't occur
-  }
-  else {
-    if ( 1 == iter->second->GetQuoteHandlerCount() ) {
-      pSymbol_t pSymSymbol( iter->second );
-      inherited_t::RemoveQuoteHandler( pInstrument, MakeDelegate( &pSymSymbol->m_simExec, &SimulateOrderExecution::NewQuote ) );
-    }
-  }
-}
-
-void SimulationProvider::AddTradeHandler( pInstrument_cref pInstrument, SimulationSymbol::tradehandler_t handler ) {
-  inherited_t::AddTradeHandler( pInstrument, handler );
-  inherited_t::m_mapSymbols_t::iterator iter;
-  iter = m_mapSymbols.find( pInstrument->GetInstrumentName( m_nID ) );
-  assert( m_mapSymbols.end() != iter );
-  pSymbol_t pSymSymbol( iter->second );
-  if ( 1 == iter->second->GetTradeHandlerCount() ) {
-    inherited_t::AddTradeHandler( pInstrument, MakeDelegate( &pSymSymbol->m_simExec, &SimulateOrderExecution::NewTrade ) );
-  }
-}
-
-void SimulationProvider::RemoveTradeHandler( pInstrument_cref pInstrument, SimulationSymbol::tradehandler_t handler ) {
-  inherited_t::RemoveTradeHandler( pInstrument, handler );
-  inherited_t::m_mapSymbols_t::iterator iter;
-  iter = m_mapSymbols.find( pInstrument->GetInstrumentName( m_nID ) );
-  if ( m_mapSymbols.end() == iter ) {
-    assert( false );  // this shouldn't occur
-  }
-  else {
-    if ( 1 == iter->second->GetTradeHandlerCount() ) {
-      pSymbol_t pSymSymbol( iter->second );
-      inherited_t::RemoveTradeHandler( pInstrument, MakeDelegate( &pSymSymbol->m_simExec, &SimulateOrderExecution::NewTrade ) );
-    }
-  }
 }
 
 // these need to open the data file, load the data, and prepare to simulate
@@ -156,12 +106,20 @@ void SimulationProvider::StopTradeWatch( pSymbol_t pSymbol ) {
   pSymbol->StopTradeWatch();
 }
 
-void SimulationProvider::StartDepthWatch( pSymbol_t pSymbol ) {
-  pSymbol->StartDepthWatch();
+void SimulationProvider::StartDepthByMMWatch( pSymbol_t pSymbol ) {
+  pSymbol->StartDepthByMMWatch();
 }
 
-void SimulationProvider::StopDepthWatch( pSymbol_t pSymbol ) {
-  pSymbol->StopDepthWatch();
+void SimulationProvider::StopDepthByMMWatch( pSymbol_t pSymbol ) {
+  pSymbol->StopDepthByMMWatch();
+}
+
+void SimulationProvider::StartDepthByOrderWatch( pSymbol_t pSymbol ) {
+  pSymbol->StartDepthByOrderWatch();
+}
+
+void SimulationProvider::StopDepthByOrderWatch( pSymbol_t pSymbol ) {
+  pSymbol->StopDepthByOrderWatch();
 }
 
 void SimulationProvider::StartGreekWatch( pSymbol_t pSymbol ) {
@@ -173,13 +131,15 @@ void SimulationProvider::StopGreekWatch( pSymbol_t pSymbol ) {
 }
 
 // root of background simulation thread, thread is started from Run.
-void SimulationProvider::Merge( void ) {
+void SimulationProvider::Merge() {
 
-  if ( 0 != m_OnSimulationThreadStarted ) m_OnSimulationThreadStarted();
+  m_pMerge = std::make_unique<MergeDatedDatums>();
+
+  if ( nullptr != m_OnSimulationThreadStarted ) m_OnSimulationThreadStarted();
 
   // for each of the symbols, add the quote, trade and greek series
   // datums from each series will be merged and emitted in chronological order
-  for ( m_mapSymbols_t::iterator iter = m_mapSymbols.begin();
+  for ( mapSymbols_t::iterator iter = m_mapSymbols.begin();
 
     iter != m_mapSymbols.end(); ++iter ) {
 
@@ -187,15 +147,29 @@ void SimulationProvider::Merge( void ) {
 
       Quotes& quotes( sym->m_quotes );
       if ( 0 != quotes.Size() ) {
-        m_pMerge -> Add( 
-          quotes, 
+        m_pMerge -> Add(
+          quotes,
           MakeDelegate( iter->second.get(), &SimulationSymbol::HandleQuoteEvent ) );
+      }
+
+      DepthsByMM& depths_mm( sym->m_depths_mm );
+      if ( 0 != depths_mm.Size() ) {
+        m_pMerge -> Add(
+          depths_mm,
+          MakeDelegate( iter->second.get(), &SimulationSymbol::HandleDepthByMMEvent ) );
+      }
+
+      DepthsByOrder& depths_order( sym->m_depths_order );
+      if ( 0 != depths_order.Size() ) {
+        m_pMerge -> Add(
+          depths_order,
+          MakeDelegate( iter->second.get(), &SimulationSymbol::HandleDepthByOrderEvent ) );
       }
 
       Trades& trades( sym->m_trades );
       if ( 0 != trades.Size() ) {
-        m_pMerge -> Add( 
-          trades, 
+        m_pMerge -> Add(
+          trades,
           MakeDelegate( iter->second.get(), &SimulationSymbol::HandleTradeEvent ) );
       }
 
@@ -209,36 +183,51 @@ void SimulationProvider::Merge( void ) {
   }
 
   m_nProcessedDatums = 0;
-  m_dtSimStart = ou::TimeSource::Instance().External();
+  m_dtSimStart = ou::TimeSource::GlobalInstance().External();
 
   bool bOldMode = ou::TimeSource::LocalCommonInstance().GetSimulationMode();
   ou::TimeSource::LocalCommonInstance().SetSimulationMode();
 
-  m_pMerge -> Run();
+  m_pMerge->Run();
 
   m_nProcessedDatums = m_pMerge->GetCountProcessedDatums();
+
   m_dtSimStop = ou::TimeSource::LocalCommonInstance().External();
 
-  if ( 0 != m_OnSimulationComplete ) m_OnSimulationComplete();
+  if ( nullptr != m_OnSimulationComplete ) m_OnSimulationComplete();
 
   ou::TimeSource::LocalCommonInstance().SetSimulationMode( bOldMode );
 
-  if ( 0 != m_OnSimulationThreadEnded ) m_OnSimulationThreadEnded();
+  if ( nullptr != m_OnSimulationThreadEnded ) m_OnSimulationThreadEnded();
+
+  m_pMerge.reset();
+}
+
+void SimulationProvider::Reset() {
+
+  // todo: what happens when Merge is 'stopped'?
+  if ( m_threadMerge.joinable() ) {
+    m_threadMerge.join(); // wait for completion
+  }
+
+  sim::SimulationInterface<SimulationProvider,SimulationSymbol>::Clear();
+  m_mapSymbols.clear();
+
 }
 
 void SimulationProvider::Run( bool bAsync ) {
+
   if ( 0 == m_sGroupDirectory.size() ) throw std::invalid_argument( "Group Directory is empty" );
   if ( 0 == m_mapSymbols.size() ) throw std::invalid_argument( "No Symbols to simulate" );
 
-  if ( 0 != m_pMerge ) {
-    std::cout << "Simulation already in progress" << std::endl;
+  if ( nullptr != m_pMerge.get() ) {
+    BOOST_LOG_TRIVIAL(info) << "Simulation already in progress";
   }
   else {
-    m_pMerge = new MergeDatedDatums();
-    boost::thread sim( boost::bind( &SimulationProvider::Merge, this ) );
+    m_threadMerge = std::move( std::thread( std::bind( &SimulationProvider::Merge, this ) ) );
 
     if ( !bAsync ) {
-      sim.join();
+      m_threadMerge.join();
     }
 
   }
@@ -246,42 +235,25 @@ void SimulationProvider::Run( bool bAsync ) {
 
 void SimulationProvider::EmitStats( std::stringstream& ss ) {
   boost::posix_time::time_duration dur = m_dtSimStop - m_dtSimStart;
-  unsigned long nDuration = dur.total_seconds();
-  unsigned long nDatumsPerSecond = m_nProcessedDatums / nDuration;
-//  ss << m_nProcessedDatums << " datums in " << nDuration << " seconds, " << nDatumsPerSecond << " datums/second." << std::endl;
-    ss << m_nProcessedDatums << " datums in " << nDuration << " seconds, " << nDatumsPerSecond << " datums/second.";
+  unsigned long nDuration = dur.total_milliseconds();
+  if ( 0 == nDuration ) {
+    ss << m_nProcessedDatums << " datums processed";
+  }
+  else {
+    double nDatumsPerSecond = (double)m_nProcessedDatums / (double)nDuration;
+  //  ss << m_nProcessedDatums << " datums in " << nDuration << " seconds, " << nDatumsPerSecond << " datums/second." << std::endl;
+    ss << m_nProcessedDatums << " datums in " << nDuration << " milliseconds, " << nDatumsPerSecond << " datums/millisecond.";
+  }
 }
 
 // at some point:  run, stop, pause, resume, reset
 void SimulationProvider::Stop() {
-  if ( NULL == m_pMerge ) {
-    std::cout << "no simulation to stop" << std::endl;
+  if ( nullptr == m_pMerge.get() ) {
+    BOOST_LOG_TRIVIAL(info) << "no simulation to stop";
   }
   else {
     m_pMerge->Stop();
-    std::cout << "stopping simulation" << std::endl;
-  }
-}
-
-void SimulationProvider::PlaceOrder( pOrder_t pOrder ) {
-  inherited_t::PlaceOrder( pOrder ); // any underlying initialization
-  m_mapSymbols_t::iterator iter = m_mapSymbols.find( pOrder->GetInstrument()->GetInstrumentName() );
-  if ( m_mapSymbols.end() == iter ) {
-    std::cout << "Can't place order, can't find symbol: " << pOrder->GetInstrument()->GetInstrumentName( m_nID ) << std::endl;
-  }
-  else {
-    iter->second->m_simExec.SubmitOrder( pOrder );
-  }
-}
-
-void SimulationProvider::CancelOrder( pOrder_t pOrder ) {
-  inherited_t::CancelOrder( pOrder );
-  m_mapSymbols_t::iterator iter = m_mapSymbols.find( pOrder->GetInstrument()->GetInstrumentName() );
-  if ( m_mapSymbols.end() == iter ) {
-    std::cout << "Can't cancel order, can't find symbol: " << pOrder->GetInstrument()->GetInstrumentName( m_nID ) << std::endl;
-  }
-  else {
-    iter->second->m_simExec.CancelOrder( pOrder->GetOrderId() );
+    BOOST_LOG_TRIVIAL(info) << "stopping simulation";
   }
 }
 
@@ -296,7 +268,6 @@ void SimulationProvider::HandleCommission( Order::idOrder_t orderId, double comm
 void SimulationProvider::HandleCancellation( Order::idOrder_t orderId ) {
   OrderManager::LocalCommonInstance().ReportCancellation( orderId );
 }
-
 
 } // namespace tf
 } // namespace ou

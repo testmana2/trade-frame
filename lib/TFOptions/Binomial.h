@@ -18,6 +18,8 @@
 
 #pragma once
 
+#include <cassert>
+
 #include <TFTrading/TradingEnumerations.h>
 
 namespace ou { // One Unified
@@ -26,8 +28,8 @@ namespace option { // options
 namespace binomial { // binomial
 
 struct structInput {
-  ou::tf::OptionSide::enumOptionSide optionSide;
-  ou::tf::OptionStyle::enumOptionStyle optionStyle;
+  ou::tf::OptionSide::EOptionSide optionSide;
+  ou::tf::OptionStyle::EOptionStyle optionStyle;
   double S; // price of underlying
   double X; // strike price
   double T; // time to expiry
@@ -35,6 +37,20 @@ struct structInput {
   double b; // make same as r, carry rate
   double v; // volatility
   long n;  // number of time steps
+  structInput():
+    optionStyle( ou::tf::OptionStyle::American ),
+    optionSide( ou::tf::OptionSide::Unknown ),
+    n( 91 ), // binomial steps
+    S( 0.0 ), X( 0.0 ), r( 0.0 ), b( 0.0 ), v( 0.0 ),
+    T( 0.0 ) {}
+  void Check() {
+    assert( 0.0 != v );
+    assert( ou::tf::OptionSide::Unknown != optionSide );
+    assert( 0.0 != S );
+    assert( 0.0 != T );
+    assert( 0.0 != r );
+    assert( 0.0 != b );
+  }
 };
 
 struct structOutput {

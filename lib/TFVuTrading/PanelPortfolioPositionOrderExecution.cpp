@@ -21,7 +21,7 @@ namespace ou { // One Unified
 namespace tf { // TradeFrame
 
 // need to fix this constructor for proper use of wxPanel inherit
-PanelPortfolioPositionOrderExecution::PanelPortfolioPositionOrderExecution( MPPOE_t* pMPPOE ) 
+PanelPortfolioPositionOrderExecution::PanelPortfolioPositionOrderExecution( MPPOE_t* pMPPOE )
   : m_pMPPOE( pMPPOE )
 {
   Init();
@@ -37,7 +37,8 @@ PanelPortfolioPositionOrderExecution::PanelPortfolioPositionOrderExecution( /*wx
   Create(parent, id, pos, size, style);
 }
 
-PanelPortfolioPositionOrderExecution::~PanelPortfolioPositionOrderExecution(void) {
+PanelPortfolioPositionOrderExecution::~PanelPortfolioPositionOrderExecution() {
+  //std::cout << "~PanelPortfolioPositionOrderExecution" << std::endl;
 }
 
 bool PanelPortfolioPositionOrderExecution::Create( /*wxWindow* parent, const wxString& title, const wxPoint& pos, const wxSize& size, long style*/
@@ -56,32 +57,32 @@ bool PanelPortfolioPositionOrderExecution::Create( /*wxWindow* parent, const wxS
     return true;
 }
 
-void PanelPortfolioPositionOrderExecution::Init( void ) {
-  m_vContextMenu.resize( eModelTypeCount );
+void PanelPortfolioPositionOrderExecution::Init() {
+  m_vContextMenu.resize( EMTModelTypeCount );
   wxMenu* pMenu;
   pMenu = new wxMenu;
 //  pMenu->Append( 1, "Add Position" );
   pMenu->Append( eTreeCMPortfolioMasterAddCurrencySummary, "Place Holder" );
-  m_vContextMenu[ ePortfolioMaster ].reset( pMenu );
+  m_vContextMenu[ EMTPortfolioMaster ].reset( pMenu );
 
   pMenu = new wxMenu;
   pMenu->Append( eTreeCMPortfolioCurrencyAddPosition, "Add Position" );
   pMenu->Append( eTreeCMPortfolioCurrencyAddPortfolio, "Add Portfolio" );
-  m_vContextMenu[ ePortfolioCurrency ].reset( pMenu );
+  m_vContextMenu[ EMTPortfolioCurrency ].reset( pMenu );
 
   pMenu = new wxMenu;
   pMenu->Append( eTreeCMPortfolioAddPosition, "Add Position" );
   pMenu->Append( eTreeCMPortfolioAddPortfolio, "Add Portfolio" );
-  m_vContextMenu[ ePortfolio ].reset( pMenu );
+  m_vContextMenu[ EMTPortfolio ].reset( pMenu );
 
   pMenu = new wxMenu;
   pMenu->Append( eTreeCMPositionCreateOrder, "Create Order" );
   pMenu->Append( eTreeCMPositionClosePosition, "Close Position" ); // show only if position is non-zero
-  m_vContextMenu[ ePosition ].reset( pMenu );
+  m_vContextMenu[ EMTPosition ].reset( pMenu );
 
   pMenu = new wxMenu;
   pMenu->Append( eTreeCMOrderCancelOrder, "Cancel Order" );
-  m_vContextMenu[ eOrder ].reset( pMenu );
+  m_vContextMenu[ EMTOrder ].reset( pMenu );
 
 }
 
@@ -153,7 +154,7 @@ void PanelPortfolioPositionOrderExecution::CreateControls( void ) {
   // Portfolios & Positions
   m_pDVPortfolios = new VuPortfolios( m_pMPPOE->GetModelPortfolio(), pSplitPortfolioPosition, wxID_ANY, wxDefaultPosition, wxDefaultSize, commonStyle );
   m_pDVPositions = new VuPositions( m_pMPPOE->GetModelPosition(), pSplitPortfolioPosition, wxID_ANY, wxDefaultPosition, wxDefaultSize, commonStyle );
-  
+
   pSplitPortfolioPosition->Initialize( m_pDVPortfolios );
   pSplitPortfolioPosition->SplitHorizontally( m_pDVPortfolios, m_pDVPositions );
   pPanelPortfolioPosition->Show( true );
@@ -166,13 +167,13 @@ void PanelPortfolioPositionOrderExecution::CreateControls( void ) {
   pSplitOrderExecution->SplitHorizontally( m_pDVOrders, m_pDVExecutions );
   pPanelOrderExecution->Show( true );
 
-  Show( true );
+  //Show( true );
 
 }
 
 void PanelPortfolioPositionOrderExecution::OnClose( wxCloseEvent& event ) {
   // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+  // event.CanVeto(); // if not a
   event.Skip();  // auto followed by Destroy();
 }
 

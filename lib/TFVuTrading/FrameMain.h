@@ -19,12 +19,10 @@
 #include <string>
 #include <vector>
 
-#include <boost/shared_ptr.hpp>
 #include <boost/serialization/version.hpp>
 #include <boost/serialization/split_member.hpp>
 
 #include <wx/frame.h>
-#include <wx/statusbr.h>
 
 #include <OUCommon/FastDelegate.h>
 using namespace fastdelegate;
@@ -35,11 +33,14 @@ using namespace fastdelegate;
 #define SYMBOL_FRAMEGENERIC_SIZE wxSize(400, 500)
 #define SYMBOL_FRAMEGENERIC_POSITION wxDefaultPosition
 
+class wxMenuBar;
+class wxStatusBar;
+
 class FrameMain: public wxFrame {
   friend class boost::serialization::access;
 public:
 
-  typedef FastDelegate0<> OnActionHandler_t;
+  using OnActionHandler_t = FastDelegate0<>;
 
   struct structMenuItem: wxObject {
     std::string text;
@@ -52,34 +53,29 @@ public:
       : text( rhs.text ), OnActionHandler( rhs.OnActionHandler ), ix( rhs.ix ) {};
   };
 
-  typedef std::vector<structMenuItem*> vpItems_t;
+  using vpItems_t = std::vector<structMenuItem*>;
 
-  FrameMain(void);
-  FrameMain( 
-    wxWindow* parent, 
-    wxWindowID id = SYMBOL_FRAMEGENERIC_IDNAME, 
-    const wxString& caption = SYMBOL_FRAMEGENERIC_TITLE, 
-    const wxPoint& pos = SYMBOL_FRAMEGENERIC_POSITION, 
-    const wxSize& size = SYMBOL_FRAMEGENERIC_SIZE, 
+  FrameMain();
+  FrameMain(
+    wxWindow* parent,
+    wxWindowID id = SYMBOL_FRAMEGENERIC_IDNAME,
+    const wxString& caption = SYMBOL_FRAMEGENERIC_TITLE,
+    const wxPoint& pos = SYMBOL_FRAMEGENERIC_POSITION,
+    const wxSize& size = SYMBOL_FRAMEGENERIC_SIZE,
     long style = SYMBOL_FRAMEGENERIC_STYLE );
-  ~FrameMain(void);
+  virtual ~FrameMain();
 
-  bool Create( 
-    wxWindow* parent, 
-    wxWindowID id = SYMBOL_FRAMEGENERIC_IDNAME, 
-    const wxString& caption = SYMBOL_FRAMEGENERIC_TITLE, 
-    const wxPoint& pos = SYMBOL_FRAMEGENERIC_POSITION, 
-    const wxSize& size = SYMBOL_FRAMEGENERIC_SIZE, 
+  bool Create(
+    wxWindow* parent,
+    wxWindowID id = SYMBOL_FRAMEGENERIC_IDNAME,
+    const wxString& caption = SYMBOL_FRAMEGENERIC_TITLE,
+    const wxPoint& pos = SYMBOL_FRAMEGENERIC_POSITION,
+    const wxSize& size = SYMBOL_FRAMEGENERIC_SIZE,
     long style = SYMBOL_FRAMEGENERIC_STYLE );
-
 
   int AddFileMenuItem( const wxString& );
-  
-  void AddDynamicMenu( const std::string& root, const vpItems_t& vItems );
-  
-  static bool ShowToolTips() { return true; };
-  wxBitmap GetBitmapResource( const wxString& name );
-  wxIcon GetIconResource( const wxString& name );
+
+  wxMenu* AddDynamicMenu( const std::string& root, const vpItems_t& vItems );
 
 protected:
 private:
@@ -87,50 +83,81 @@ private:
   enum { ID_Null=wxID_HIGHEST, ID_FRAMEGENERIC, ID_MENUEXIT, ID_STATUSBAR, ID_PANELMAIN,
     ID_DYNAMIC_MENU_ACTIONS // must be last in line
   };
-  
+
+  wxPoint m_pointMove;
+
   int m_ixDynamicMenuItem;  // initialized to ID_DYNAMIC_MENU_ACTIONS and incremented with each new menu entry
   wxMenu* m_menuFile;
 
   wxMenuBar* m_menuBar;
   wxStatusBar* m_statusBar;
 
-//  typedef std::vector<structMenuItem*> vPtrItems_t;  // wxWidgets take ownership of object
   vpItems_t m_vPtrItems;
 
   void Init();
   void CreateControls();
 
-  void OnMenuExitClick( wxCommandEvent& event );
-  void OnDynamicActionClick( wxCommandEvent& event );
-  void OnClose( wxCloseEvent& event );
-  
+  void OnFrameMainAutoMove( wxMoveEvent& event );
+
+  wxBitmap GetBitmapResource( const wxString& name );
+  wxIcon GetIconResource( const wxString& name );
+
+  void OnMenuExitClick( wxCommandEvent& );
+  void OnDynamicActionClick( wxCommandEvent& );
+  void OnDestroy( wxWindowDestroyEvent& );
+  void OnClose( wxCloseEvent& );
+
   template<typename Archive>
   void save( Archive& ar, const unsigned int version ) const {
     //ar & boost::serialization::base_object<const TreeItemResources>(*this);
-    wxPoint point = this->GetPosition();
-    ar & point.x;
-    ar & point.y;
-    wxSize size = this->GetSize();
+
+    wxSize size = GetSize();
     ar & size.x;
     ar & size.y;
+
+    wxPoint point = GetPosition();
+    ar & point.x;
+    ar & point.y;
   }
 
   template<typename Archive>
   void load( Archive& ar, const unsigned int version ) {
     //ar & boost::serialization::base_object<TreeItemResources>(*this);
+
     int x, y;
-    ar & x;
-    ar & y;
-    wxPoint point( x, y );
-    this->SetPosition( point );
-    ar & x;
-    ar & y;
-    wxSize size( x, y );
-    this->SetSize( size );
+
+    if ( 1 == version ) {
+      ar & x;
+      ar & y;
+      wxPoint point( x, y );
+      CallAfter(
+        [this,point](){
+          SetPosition( point );
+        } );
+
+      ar & x;
+      ar & y;
+      wxSize size( x, y );
+      SetSize( size );
+      Layout();
+
+    }
+    else {
+      ar & x;
+      ar & y;
+      wxSize size( x, y );
+      SetSize( size );
+
+      ar & x;
+      ar & y;
+      m_pointMove = wxPoint( x, y ); // save until the initial bogus move completes
+      //wxPoint position( x, y );
+      //Move( position );
+    }
   }
 
   BOOST_SERIALIZATION_SPLIT_MEMBER()
 };
 
-BOOST_CLASS_VERSION(FrameMain, 1)
+BOOST_CLASS_VERSION(FrameMain, 2)
 

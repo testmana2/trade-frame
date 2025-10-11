@@ -16,6 +16,10 @@
 
 // Started 2013/10/26
 
+// 20170416 TODO: split into two modules or classes
+//   generic chart definitions
+//   hdf5 data retrieval for Hdf5Chart
+
 #include <OUCharting/ChartDataView.h>
 
 #include <OUCharting/ChartEntryBars.h>
@@ -31,11 +35,25 @@ namespace tf { // TradeFrame
 class ModelChartHdf5 {
 public:
 
-  ModelChartHdf5( void );
-  virtual ~ModelChartHdf5(void);
+  ModelChartHdf5();
+  virtual ~ModelChartHdf5();
 
+  struct Equities {
+    const ou::tf::Quotes& quotes;
+    const ou::tf::Trades& trades;
+    Equities( const ou::tf::Quotes& quotes_, const ou::tf::Trades& trades_ )
+      : quotes( quotes_ ), trades( trades_ ) {}
+  };
+
+  struct Options: public Equities {
+    const ou::tf::Greeks& greeks;
+    Options( const ou::tf::Quotes& quotes_, const ou::tf::Trades& trades_, const ou::tf::Greeks& greeks_ )
+      : Equities( quotes_, trades_ ), greeks( greeks_ ) {}
+  };
+
+  // only usual timeseries can be used here
   template<typename TS> // TS=timeseries
-  void ChartTimeSeries( ou::tf::HDF5DataManager* pdm, ou::ChartDataView* pChartDataView, const std::string& sName, const std::string& sPath ) {
+  size_t ChartTimeSeries( ou::tf::HDF5DataManager* pdm, ou::ChartDataView* pChartDataView, const std::string& sName, const std::string& sPath ) {
 
     pChartDataView->SetNames( sName, sPath );
 
@@ -50,27 +68,23 @@ public:
 
     AddChartEntries( pChartDataView, series );
 
-//    m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
+    return cnt;
+
   }
 
+  // Normal timeseries plus equities/options structs can be used here:
   template<typename TS> // TS=timeseries
-  void ChartTimeSeries( ou::ChartDataView* pChartDataView, const TS& series, const std::string& sName, const std::string& sDescription ) {
+  size_t ChartTimeSeries( ou::ChartDataView* pChartDataView, const TS& series, const std::string& sName, const std::string& sDescription ) {
 
     pChartDataView->SetNames( sName, sDescription );
-
-//    ou::tf::HDF5TimeSeriesContainer<TS::datum_t> tsRepository( *pdm, sPath );
-//    ou::tf::HDF5TimeSeriesContainer<TS::datum_t>::iterator begin, end;
-//    begin = tsRepository.begin();
-//    end = tsRepository.end();
-//    hsize_t cnt = end - begin;
-//    TS series;
-//    series.Resize( cnt );
-//    tsRepository.Read( begin, end, &series );
-
     AddChartEntries( pChartDataView, series );
 
-//    m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
+    return 0;
   }
+
+  void HandleQuote( const ou::tf::Quote& quote );
+  void HandleTrade( const ou::tf::Trade& trade );
+  void HandleGreek( const ou::tf::Greek& greek );
 
 protected:
 private:
@@ -92,11 +106,29 @@ private:
   ou::ChartEntryVolume m_ceVolumeUpper;
   ou::ChartEntryVolume m_ceVolumeLower;
 
-  void AddChartEntries( ou::ChartDataView* pChartDataView, const ou::tf::Bars& bars );
-  void AddChartEntries( ou::ChartDataView* pChartDataView, const ou::tf::Quotes& quotes );
-  void AddChartEntries( ou::ChartDataView* pChartDataView, const ou::tf::Trades& trades );
-  void AddChartEntries( ou::ChartDataView* pChartDataView, const ou::tf::PriceIVs& ivs );
-  void AddChartEntries( ou::ChartDataView* pChartDataView, const ou::tf::Greeks& greeks );
+  void Clear();
+
+  void DefineChartBars( ou::ChartDataView* );
+  void DefineChartQuotes( ou::ChartDataView* );
+  void DefineChartTrades( ou::ChartDataView* );
+  void DefineChartPriceIVs( ou::ChartDataView* );
+  void DefineChartPriceIVExpirys( ou::ChartDataView* );
+  void DefineChartGreeks( ou::ChartDataView* );
+  void DefineChartEquities( ou::ChartDataView* );
+  void DefineChartOptions( ou::ChartDataView* );
+  void DefineChartDepthsByMM( ou::ChartDataView* );
+  void DefineChartDepthsByOrder( ou::ChartDataView* );
+
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::Bars& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::Quotes& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::Trades& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::PriceIVs& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::PriceIVExpirys& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::Greeks& );
+  void AddChartEntries( ou::ChartDataView*, const Equities& );
+  void AddChartEntries( ou::ChartDataView*, const Options& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::DepthsByMM& );
+  void AddChartEntries( ou::ChartDataView*, const ou::tf::DepthsByOrder& );
 
 };
 

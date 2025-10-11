@@ -20,7 +20,7 @@
 
 #include <boost/foreach.hpp>
 #include <boost/thread.hpp>  // separate thread background merge processing
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/asio.hpp>
 
 #include <TFTrading/InstrumentManager.h>
@@ -58,7 +58,7 @@ bool AppOptimizeStrategy::OnInit( void ) {
   m_sizerMain->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
 
   m_pPanelLogging = new ou::tf::PanelLogging( m_pFrameMain, wxID_ANY );
-  m_sizerStatus->Add( m_pPanelLogging, 1, wxALL | wxEXPAND|wxALIGN_LEFT|wxALIGN_RIGHT|wxALIGN_TOP|wxALIGN_BOTTOM, 0);
+  m_sizerStatus->Add( m_pPanelLogging, 1, wxALL | wxEXPAND, 0);
   m_pPanelLogging->Show( true );
 
   m_pFrameMain->Show( true );
@@ -76,7 +76,6 @@ void AppOptimizeStrategy::Optimizer( void ) {
 // ->  m_pProvider->SetGroupDirectory( "/app/semiauto/2011-Nov-06 18:54:22.184889" );
   //m_sim->SetGroupDirectory( "/app/semiauto/2011-Nov-07 18:53:31.016760" );
   //m_sim->SetGroupDirectory( "/app/semiauto/2011-Nov-08 18:58:29.396624" );
-//  m_sim->SetExecuteAgainst( ou::tf::CSimulateOrderExecution::EAQuotes );
 
   ou::tf::InstrumentManager::SetLocalCommonInstance( new ou::tf::InstrumentManager );
 

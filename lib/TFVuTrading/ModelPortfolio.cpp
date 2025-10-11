@@ -16,7 +16,7 @@
 #include <boost/assign/std/vector.hpp>
 using namespace boost::assign;
 
-#include <boost/spirit/include/phoenix_core.hpp>
+#include <boost/phoenix/core.hpp>
 #include <boost/phoenix/bind.hpp> 
 #include <boost/phoenix/bind/bind_member_function.hpp>
 
@@ -26,7 +26,7 @@ namespace ou { // One Unified
 namespace tf { // TradeFrame
 
 ModelPortfolio::ModelPortfolio(void) 
-  : ModelBase<ModelPortfolio>(), m_mgrPortfolio( ou::tf::PortfolioManager::Instance() )
+  : ModelBase<ModelPortfolio>(), m_mgrPortfolio( ou::tf::PortfolioManager::GlobalInstance() )
 {
   m_vColumnNames += "Name", "Rlzd PL", "Comm.", "Net";
 //  m_mgrPortfolio.OnPortfolioAdded.Add( MakeDelegate( this, &ModelPortfolio::AddPortfolioToModel ) );
@@ -40,19 +40,32 @@ ModelPortfolio::~ModelPortfolio(void) {
 // part of the process of the initial sync, can be used for adding additional portfolios
 //void ModelPortfolio::AddPortfolioToModel( const idPortfolio_t& idPortfolio ) {
 void ModelPortfolio::AddPortfolioToModel( DataViewItemPortfolio* pItem ) {
-  mapItems_citer_t iter = m_mapItems.find( pItem->GetID() );
-  if ( m_mapItems.end() == iter ) {
+  setItems_citer_t iter = m_setItems.find( pItem );
+  if ( m_setItems.end() == iter ) {
 //    DataViewItemPortfolio item( m_mgrPortfolio.GetPortfolio( idPortfolio ) );
 //    iter = m_mapItems.insert( m_mapItems.begin(), mapItems_t::value_type( idPortfolio, item ) );
 //    iter = m_mapItems.insert( m_mapItems.begin(), mapItems_t::value_type( pItem->GetID(), pItem ) );
-    iter = m_mapItems.insert( m_mapItems.begin(), mapItems_t::value_type( pItem->GetID(), pItem ) );
-    ItemAdded( m_itemNull, *pItem );
-    //ItemChanged( *pItem );
+    auto pair = m_setItems.insert( setItems_t::value_type( pItem ) );
+    ItemChanged( wxDataViewItem( pItem ) );
+    //ItemAdded( wxDataViewItem( nullptr ), wxDataViewItem( pItem ) );
   }
   // may desire to use boost::fusion to work on variable types
 }
 
 void ModelPortfolio::ProcessUpdatedItemDetails( DataViewItemPortfolio& item ) {
+}
+
+bool ModelPortfolio::IsContainer( const wxDataViewItem& item ) const {
+  if ( 0 != item.GetID() ) {
+    return false;
+  }
+  else {
+    return 0 != m_setItems.size();
+  }
+}
+
+wxDataViewItem ModelPortfolio::GetParent( const wxDataViewItem& item ) const {
+  return wxDataViewItem( nullptr );
 }
 
 unsigned int ModelPortfolio::GetChildren(	const wxDataViewItem& item, wxDataViewItemArray& children	) const {
@@ -61,30 +74,30 @@ unsigned int ModelPortfolio::GetChildren(	const wxDataViewItem& item, wxDataView
   // may need refinement to make use of item properly in a tree environment
   unsigned int count = 0;
   if ( 0 == item.GetID() ) {
-    for ( mapItems_citer_t iter = m_mapItems.begin(); m_mapItems.end() != iter; ++iter ) {
-      children.Add( *iter->second );
+    for ( setItems_citer_t iter = m_setItems.begin(); m_setItems.end() != iter; ++iter ) {
+      children.Add( wxDataViewItem( *iter ) );
     }
-    count = m_mapItems.size();
+    count = m_setItems.size();
   }
   return count;
 }
 
 void ModelPortfolio::GetValue( wxVariant& variant, const wxDataViewItem& item, unsigned int col	) const {
   // use fusion to create array of type calls?
-  mapItems_citer_t iter = m_mapItems.find( item.GetID() );
-  assert( m_mapItems.end() != iter );
+  setItems_citer_t iter = m_setItems.find( reinterpret_cast<DataViewItemPortfolio*>( item.GetID() ) );
+  assert( m_setItems.end() != iter );
   switch ( col ) {
   case 0:
-    iter->second->AssignFirstColumn( variant );
+    (*iter)->AssignFirstColumn( variant );
     break;
   case 1:
-    variant = iter->second->Value()->GetRow().dblRealizedPL;
+    variant = (*iter)->GetPtr()->GetRow().dblRealizedPL;
     break;
   case 2:
-    variant = iter->second->Value()->GetRow().dblCommissionsPaid;
+    variant = (*iter)->GetPtr()->GetRow().dblCommissionsPaid;
     break;
   case 3: {
-    const ou::tf::Portfolio::TableRowDef& row( iter->second->Value()->GetRow() );
+    const ou::tf::Portfolio::TableRowDef& row( (*iter)->GetPtr()->GetRow() );
     variant = row.dblRealizedPL - row.dblCommissionsPaid;
           }
     break;
@@ -96,10 +109,10 @@ void ModelPortfolio::GetValue( wxVariant& variant, const wxDataViewItem& item, u
 // maybe add to base class
 // need to track point of last click, if last click was same place, don't do the same thing
 void ModelPortfolio::ClearItems( void ) {
-  for ( mapItems_t::iterator iter = m_mapItems.begin(); m_mapItems.end() != iter; ++iter ) {
-    ItemDeleted( m_itemNull, *iter->second );
+  for ( setItems_t::iterator iter = m_setItems.begin(); m_setItems.end() != iter; ++iter ) {
+    ItemDeleted( wxDataViewItem( nullptr ), wxDataViewItem( *iter ) );
   }
-  m_mapItems.clear();
+  m_setItems.clear();
 }
 
 } // namespace tf

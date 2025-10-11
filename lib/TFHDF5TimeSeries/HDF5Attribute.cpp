@@ -31,7 +31,7 @@ const char szMultiplier[] = "Multiplier";
 const char szSignificantDigits[] = "SignificantDigits";
 const char szSignature[] = "Signature";
 
- HDF5Attributes::HDF5Attributes( HDF5DataManager& dm ) 
+ HDF5Attributes::HDF5Attributes( HDF5DataManager& dm )
  : m_pDataSet( NULL ), m_dm( dm )
 {
 }
@@ -40,7 +40,7 @@ HDF5Attributes::HDF5Attributes( HDF5DataManager& dm, const std::string& sPath ):
   OpenDataSet( sPath );
 }
 
-HDF5Attributes::HDF5Attributes( HDF5DataManager& dm, const std::string& sPath, InstrumentType::enumInstrumentTypes typeInst ): m_dm( dm ) {
+HDF5Attributes::HDF5Attributes( HDF5DataManager& dm, const std::string& sPath, InstrumentType::EInstrumentType typeInst ): m_dm( dm ) {
   OpenDataSet( sPath );
   SetInstrumentType( typeInst );
 }
@@ -70,15 +70,15 @@ void HDF5Attributes::CloseDataSet ( void ) {
   }
 }
 
-void HDF5Attributes::SetInstrumentType( InstrumentType::enumInstrumentTypes typeInstrument ) {
+void HDF5Attributes::SetInstrumentType( InstrumentType::EInstrumentType typeInstrument ) {
   H5::DataSpace dspace;
   H5::Attribute attribute( m_pDataSet->createAttribute( szInstrumentType, H5::PredType::NATIVE_INT8, dspace ) );
   attribute.write( H5::PredType::NATIVE_INT8, &typeInstrument );
   attribute.close();
 }
 
-InstrumentType::enumInstrumentTypes HDF5Attributes::GetInstrumentType( void ) {
-  InstrumentType::enumInstrumentTypes typeInstrument;
+InstrumentType::EInstrumentType HDF5Attributes::GetInstrumentType( void ) {
+  InstrumentType::EInstrumentType typeInstrument;
   H5::Attribute attribute( m_pDataSet->openAttribute( szInstrumentType ) );
   attribute.read(H5::PredType::NATIVE_INT8, &typeInstrument );
   attribute.close();
@@ -92,7 +92,7 @@ void HDF5Attributes::SetSignature( boost::uint64_t sig ) {
   attribute.close();
 }
 
-boost::uint64_t HDF5Attributes::GetSignature( void ) {
+boost::uint64_t HDF5Attributes::GetSignature() {
   boost::uint64_t sig;
   H5::Attribute attribute( m_pDataSet->openAttribute( szSignature ) );
   attribute.read(H5::PredType::NATIVE_UINT64, &sig );
@@ -147,7 +147,7 @@ unsigned short HDF5Attributes::GetMultiplier( void ) {
 
 void HDF5Attributes::SetOptionAttributes( const structOption& option ) {
 
-  SetInstrumentType( InstrumentType::Option );
+  //SetInstrumentType( InstrumentType::Option );
 
   H5::DataSpace dspace;
 
@@ -198,7 +198,7 @@ void HDF5Attributes::GetOptionAttributes( structOption* option ) {
 
 void HDF5Attributes::SetFutureAttributes( const structFuture& future ) {
 
-  SetInstrumentType( InstrumentType::Future );
+  //SetInstrumentType( InstrumentType::Future );
 
   H5::DataSpace dspace;
 

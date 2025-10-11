@@ -12,13 +12,15 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
+#include <wx/icon.h>
+#include <wx/button.h>
+#include <wx/dcclient.h>
 
 #include <boost/assign/std/vector.hpp>
 using namespace boost::assign;
 
-#include <wx/mstream.h>
 #include <wx/bitmap.h>
+#include <wx/mstream.h>
 
 #include "PanelArmsIndex.h"
 
@@ -61,7 +63,7 @@ void PanelArmsIndex::Init() {
 
   m_ixActiveChart = 0;
 
-    
+
 
 /*    m_vCollections.push_back( collection_t( "DOW" ) );
     collection_t& c( m_vCollections.back() );
@@ -72,12 +74,6 @@ void PanelArmsIndex::Init() {
       "NKE", "PFE", "PG", "TRV", "UTX",
       "UNH", "VZ", "V", "WMT", "DIS";
 */
-  // this should be set via OUCharting/ChartMaster
-  //bool b = Chart::setLicenseCode( "DEVP-2G22-4QPN-HDS6-925A-95C1" );
-  char code[2048];
-  bool b = Chart::setLicenseCode( "DEVP-2G22-4QPN-HDS6-925A-95C1 UDEV-23FP-5DWS-X22U-BBBD-FBD8", code );
-  assert( b );
-
 }
 
 void PanelArmsIndex::OnClose( wxCloseEvent& event ) {
@@ -97,46 +93,48 @@ void PanelArmsIndex::OnClose( wxCloseEvent& event ) {
   // Exit Steps: #2 -> FrameMain::OnClose
 //  if ( 0 != OnPanelClosing ) OnPanelClosing();
   // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+  // event.CanVeto(); // if not a
   event.Skip();  // auto followed by Destroy();
 
 }
 
-void PanelArmsIndex::CreateControls() {    
+void PanelArmsIndex::CreateControls() {
 
     PanelArmsIndex* itemPanel1 = this;
 
-    m_sizerPanelArmsIndex = new wxBoxSizer(wxVERTICAL);
+    m_sizerPanelArmsIndex = new wxBoxSizer(wxHORIZONTAL);
     itemPanel1->SetSizer(m_sizerPanelArmsIndex);
 
-    m_splitterArmsIndex = new wxSplitterWindow( itemPanel1, ID_SplitterArmsIndex, wxDefaultPosition, wxDefaultSize, wxSP_3DBORDER|wxSP_3DSASH );
-    m_splitterArmsIndex->SetMinimumPaneSize(100);
+    m_splitterArmsIndex = new wxSplitterWindow( itemPanel1, ID_SplitterArmsIndex, wxDefaultPosition, wxDefaultSize, wxSP_3DBORDER|wxSP_3DSASH|wxEXPAND );
+    m_splitterArmsIndex->SetMinimumPaneSize(50);
 
-    wxPanel* itemPanel4 = new wxPanel( m_splitterArmsIndex, ID_PANEL8, wxDefaultPosition, wxDefaultSize, wxSUNKEN_BORDER|wxTAB_TRAVERSAL );
+    wxPanel* itemPanel4 = new wxPanel( m_splitterArmsIndex, ID_PanelLeft, wxDefaultPosition, wxDefaultSize, wxSUNKEN_BORDER|wxTAB_TRAVERSAL );
+    itemPanel4->SetName(wxT("Panel Left"));
     wxBoxSizer* itemBoxSizer5 = new wxBoxSizer(wxVERTICAL);
     itemPanel4->SetSizer(itemBoxSizer5);
 
     wxArrayString m_lbArmsIndexStrings;
-    m_lbArmsIndex = new wxListBox( itemPanel4, ID_LbArmsIndex, wxDefaultPosition, wxSize(90, 80), m_lbArmsIndexStrings, wxLB_SINGLE );
+    m_lbArmsIndex = new wxListBox( itemPanel4, ID_LbArmsIndex, wxDefaultPosition, wxSize(90, 150), m_lbArmsIndexStrings, wxLB_SINGLE );
     itemBoxSizer5->Add(m_lbArmsIndex, 0, wxGROW|wxALL, 2);
 
-    m_btnToggleView = new wxButton( itemPanel4, ID_BtnToggleView, _("Toggle View"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnToggleView = new wxButton( itemPanel4, ID_BtnToggleView, _("Time Frame"), wxDefaultPosition, wxDefaultSize, 0 );
     itemBoxSizer5->Add(m_btnToggleView, 0, wxALIGN_CENTER_HORIZONTAL|wxALL, 5);
 
-    wxPanel* itemPanel8 = new wxPanel( m_splitterArmsIndex, ID_PANEL9, wxDefaultPosition, wxDefaultSize, wxSUNKEN_BORDER|wxTAB_TRAVERSAL );
+    wxPanel* itemPanel8 = new wxPanel( m_splitterArmsIndex, ID_PanelRight, wxDefaultPosition, wxDefaultSize, wxSUNKEN_BORDER|wxTAB_TRAVERSAL );
+    itemPanel8->SetName(wxT("Panel Right"));
     m_sizerCharts = new wxBoxSizer(wxVERTICAL);
     itemPanel8->SetSizer(m_sizerCharts);
 
-    m_panelIndex = new wxPanel( itemPanel8, ID_PanelIndex, wxDefaultPosition, wxSize(200, 75), wxSIMPLE_BORDER );
+    m_panelIndex = new wxPanel( itemPanel8, ID_PanelIndex, wxDefaultPosition, wxDefaultSize, wxSIMPLE_BORDER );
     m_sizerCharts->Add(m_panelIndex, 1, wxGROW|wxALL, 2);
 
-    m_panelTick = new wxPanel( itemPanel8, ID_PanelTick, wxDefaultPosition, wxSize(200, 75), wxSIMPLE_BORDER );
+    m_panelTick = new wxPanel( itemPanel8, ID_PanelTick, wxDefaultPosition, wxDefaultSize, wxSIMPLE_BORDER );
     m_sizerCharts->Add(m_panelTick, 1, wxGROW|wxALL, 2);
 
-    m_panelArmsVsIndex = new wxPanel( itemPanel8, ID_PanelArmsVsIndex, wxDefaultPosition, wxSize(200, 75), wxSIMPLE_BORDER );
+    m_panelArmsVsIndex = new wxPanel( itemPanel8, ID_PanelArmsVsIndex, wxDefaultPosition, wxDefaultSize, wxSIMPLE_BORDER );
     m_sizerCharts->Add(m_panelArmsVsIndex, 1, wxGROW|wxALL, 2);
 
-    m_splitterArmsIndex->SplitVertically(itemPanel4, itemPanel8, 110);
+    m_splitterArmsIndex->SplitVertically(itemPanel4, itemPanel8, 150);
     m_sizerPanelArmsIndex->Add(m_splitterArmsIndex, 1, wxGROW|wxALL, 2);
 
 //  Bind( wxEVT_SIZE, &PanelArmsIndex::HandleOnSize, this, this->GetId() );
@@ -163,7 +161,7 @@ void PanelArmsIndex::HandleListBoxSelection( wxCommandEvent& event ) {
   if ( wxNOT_FOUND != nSelection ) {
     m_ixActiveChart = nSelection;
   }
-  
+
 }
 
 void PanelArmsIndex::SetProvider( pProvider_t pProvider ) {
@@ -172,18 +170,19 @@ void PanelArmsIndex::SetProvider( pProvider_t pProvider ) {
     throw std::runtime_error( "provider already set" );
   }
   else {
-    m_pProvider = pProvider; 
+    m_pProvider = pProvider;
 
-    m_vCollections.push_back( collection_t( pProvider, "Dow INDU", "@YM#", "JT1T.Z", "RI1T.Z" ) );
-    m_vCollections.push_back( collection_t( pProvider, "NAS 100", "NDX.X", "JT5T.Z", "RI5T.Z" ) );
-    m_vCollections.push_back( collection_t( pProvider, "S&P 100", "OEX.XO", "JT8T.Z", "RI8T.Z" ) ); // on delay so not useful at the moment
-    m_vCollections.push_back( collection_t( pProvider, "SPX 500", "SPX.XO", "JT6T.Z", "RI6T.Z" ) ); // on delay so not useful at the moment
+    // more symbols at https://ws1.dtn.com/IQ/Search/# -- search for tick or trin
+    m_vCollections.push_back( collection_t( pProvider, "SP 500", "@ES#", "JT6T.Z", "RI6T.Z" ) );
+    m_vCollections.push_back( collection_t( pProvider, "NAS 100", "@NQ#", "JT5T.Z", "RI5T.Z" ) );
+    m_vCollections.push_back( collection_t( pProvider, "DOW INDU", "@YM#", "JT1T.Z", "RI1T.Z" ) );
+//    m_vCollections.push_back( collection_t( pProvider, "S&P 100", "OEX.XO", "JT8T.Z", "RI8T.Z" ) ); // on delay so not useful at the moment
 
     int ix( 0 );
     for ( vCollections_t::iterator iter = m_vCollections.begin(); m_vCollections.end() != iter; ++iter ) {
       iter->pip->SetOnDrawChartIndex( MakeDelegate( this, &PanelArmsIndex::DrawChartIndex ) );
-      iter->pip->SetOnDrawChartTick( MakeDelegate( this, &PanelArmsIndex::DrawChartTick ) );
-      iter->pip->SetOnDrawChartArms( MakeDelegate( this, &PanelArmsIndex::DrawChartArms ) );
+      iter->pip->SetOnDrawChartTick(  MakeDelegate( this, &PanelArmsIndex::DrawChartTick ) );
+      iter->pip->SetOnDrawChartArms(  MakeDelegate( this, &PanelArmsIndex::DrawChartArms ) );
       m_lbArmsIndex->Insert( iter->sName, ix );
       ++ix;
     }
@@ -206,7 +205,7 @@ void PanelArmsIndex::DrawChartIndex( const MemBlock& m ) {
 }
 
 void PanelArmsIndex::DrawChartTick( const MemBlock& m ) {
-  DrawChart( m, m_panelTick );  
+  DrawChart( m, m_panelTick );
 }
 
 void PanelArmsIndex::DrawChartArms( const MemBlock& m ) {

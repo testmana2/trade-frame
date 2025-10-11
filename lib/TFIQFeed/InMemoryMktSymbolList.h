@@ -27,6 +27,7 @@
 
 #include <fstream>
 
+#include "SecurityType.h"
 #include "MarketSymbol.h"
 
 namespace ou { // One Unified
@@ -39,13 +40,13 @@ public:
   struct ixSymbol{};
   struct ixExchange{};
   struct ixSymbolClass{};
-  struct ixSic{};
-  struct ixNaics{};
+  //struct ixSic{};
+  //struct ixNaics{};
   struct ixUnderlying{};
 
-  typedef ou::tf::iqfeed::MarketSymbol::TableRowDef trd_t;
+  using trd_t = ou::tf::iqfeed::MarketSymbol::TableRowDef;
 
-  typedef boost::multi_index_container<
+  using symbols_t = boost::multi_index_container<
     trd_t,
     boost::multi_index::indexed_by<
       boost::multi_index::ordered_unique<
@@ -53,32 +54,32 @@ public:
       boost::multi_index::ordered_non_unique<
         boost::multi_index::tag<ixExchange>, BOOST_MULTI_INDEX_MEMBER(trd_t,std::string,sExchange)>,
       boost::multi_index::ordered_non_unique<
-        boost::multi_index::tag<ixSymbolClass>, BOOST_MULTI_INDEX_MEMBER(trd_t,MarketSymbol::enumSymbolClassifier,sc)>,
-      boost::multi_index::ordered_non_unique<
-        boost::multi_index::tag<ixSic>, BOOST_MULTI_INDEX_MEMBER(trd_t,boost::uint32_t,nSIC)>,
-      boost::multi_index::ordered_non_unique<
-        boost::multi_index::tag<ixNaics>, BOOST_MULTI_INDEX_MEMBER(trd_t,boost::uint32_t,nNAICS)>,
+        boost::multi_index::tag<ixSymbolClass>, BOOST_MULTI_INDEX_MEMBER(trd_t,ESecurityType,sc)>,
+//      boost::multi_index::ordered_non_unique<
+//        boost::multi_index::tag<ixSic>, BOOST_MULTI_INDEX_MEMBER(trd_t,boost::uint32_t,nSIC)>,
+//      boost::multi_index::ordered_non_unique<
+//        boost::multi_index::tag<ixNaics>, BOOST_MULTI_INDEX_MEMBER(trd_t,boost::uint32_t,nNAICS)>,
       boost::multi_index::ordered_non_unique<  // IQFeed file doesn't provide good info, and option symbology sucks
-        boost::multi_index::tag<ixUnderlying>, BOOST_MULTI_INDEX_MEMBER(trd_t,std::string,sUnderlying)> 
+        boost::multi_index::tag<ixUnderlying>, BOOST_MULTI_INDEX_MEMBER(trd_t,std::string,sUnderlying)>
     >
-  > symbols_t;
+  >;
 
-  typedef symbols_t::iterator iterator;
+  using iterator = symbols_t::iterator;
 
   iterator begin(){return m_symbols.begin();}
   iterator end(){return m_symbols.end();}
 
   symbols_t::size_type Size( void ) const { return m_symbols.size(); }
-  
+
   bool Exists( const std::string& sName ) {
-    typedef symbols_t::index<ixSymbol>::type ixSymbol_t;
+    using ixSymbol_t = symbols_t::index<ixSymbol>::type;
     ixSymbol_t::const_iterator endSymbols = m_symbols.get<ixSymbol>().end();
     ixSymbol_t::const_iterator iter = m_symbols.get<ixSymbol>().find( sName );
     return ( endSymbols != iter );
   }
 
   bool HandleSymbolHasOption( const std::string& s ) {
-    typedef symbols_t::index<ixSymbol>::type SymbolsByName_t;
+    using SymbolsByName_t = symbols_t::index<ixSymbol>::type;
     SymbolsByName_t::iterator iter = m_symbols.get<ixSymbol>().find( s );
     bool bReturn = false;
     if ( m_symbols.get<ixSymbol>().end() != iter ) {
@@ -89,7 +90,7 @@ public:
   }
 
   void HandleUpdateOptionUnderlying( const std::string& sSymbol, const std::string& sUnderlying ) {
-    typedef symbols_t::index<ixSymbol>::type SymbolsByName_t;
+    using SymbolsByName_t = symbols_t::index<ixSymbol>::type;
     SymbolsByName_t::iterator iter = m_symbols.get<ixSymbol>().find( sSymbol );
     bool bReturn = false;
     if ( m_symbols.get<ixSymbol>().end() != iter ) {
@@ -113,7 +114,7 @@ public:
   }
 
   const trd_t& GetTrd( const std::string& sName ) const {
-    typedef symbols_t::index<ixSymbol>::type ixSymbol_t;
+    using ixSymbol_t = symbols_t::index<ixSymbol>::type;
     ixSymbol_t::const_iterator endSymbols = m_symbols.get<ixSymbol>().end();
     ixSymbol_t::const_iterator iter = m_symbols.get<ixSymbol>().find( sName );
     if ( endSymbols == iter ) {
@@ -124,10 +125,10 @@ public:
 
   template<typename Function>  // not sure if functions correctly, particularily if option list has other symbols interspersed
   void SelectOptionsBySymbol( const std::string& sUnderlying, Function f ) const {
-    typedef symbols_t::index<ixSymbol>::type ixSymbol_t;
+    using ixSymbol_t = symbols_t::index<ixSymbol>::type;
     ixSymbol_t::const_iterator endSymbols = m_symbols.get<ixSymbol>().end();
     for ( ixSymbol_t::const_iterator iter = m_symbols.get<ixSymbol>().find( sUnderlying ); endSymbols != iter; ++iter ) {
-      if ( ou::tf::iqfeed::MarketSymbol::IEOption == iter->sc ) {
+      if ( ou::tf::iqfeed::ESecurityType::IEOption == iter->sc ) {
         if ( iter->sUnderlying != sUnderlying ) break;
         f( *iter );
       }
@@ -137,17 +138,17 @@ public:
   // requires index by underlying, which may be taking up mucho room, actually doesn't
   template<typename Function>
   void SelectOptionsByUnderlying( const std::string& sUnderlying, Function f ) const {
-    typedef symbols_t::index<ixUnderlying>::type SymbolsByUnderlying_t;
+    using SymbolsByUnderlying_t = symbols_t::index<ixUnderlying>::type;
     SymbolsByUnderlying_t::const_iterator endSymbols = m_symbols.get<ixUnderlying>().end();
     for ( SymbolsByUnderlying_t::const_iterator iter = m_symbols.get<ixUnderlying>().find( sUnderlying ); endSymbols != iter; ++iter ) {
       if ( iter->sUnderlying != sUnderlying ) break;
       f( *iter );
     }
   }
-  
+
   template<typename ExchangeIterator, typename Function>
   void SelectSymbolsByExchange( ExchangeIterator beginExchange, ExchangeIterator endExchange, Function f ) const {
-    typedef symbols_t::index<ixExchange>::type SymbolsByExchange_t;
+    using SymbolsByExchange_t = symbols_t::index<ixExchange>::type;
     SymbolsByExchange_t::const_iterator endSymbols = m_symbols.get<ixExchange>().end();
     while ( beginExchange != endExchange ) {
       SymbolsByExchange_t::const_iterator iterSymbols = m_symbols.get<ixExchange>().find( *beginExchange );
@@ -162,7 +163,7 @@ public:
 
   template<typename Function>
   void ScanSymbols( Function f ) const {  // 2015/02/22 was Function& f
-    typedef symbols_t::index<ixSymbol>::type Symbols_t;
+    using Symbols_t = symbols_t::index<ixSymbol>::type;
     Symbols_t::const_iterator endSymbols = m_symbols.get<ixSymbol>().end();
     for ( Symbols_t::const_iterator iterSymbols = m_symbols.get<ixSymbol>().begin(); endSymbols != iterSymbols; iterSymbols++ ) {
       f( *iterSymbols );
@@ -170,7 +171,10 @@ public:
   }
 
   void InsertParsedStructure( const trd_t& trd ) {
-    m_symbols.insert( trd );
+    auto result = m_symbols.insert( trd );
+    if ( !result.second ) {
+      assert( result.second );
+    }
   }
 
   void operator()( const trd_t& trd ) {
@@ -189,12 +193,12 @@ private:
   /* serialization support */
 
   friend class boost::serialization::access;
-    
+
   template<class Archive>
   void serialize(Archive& ar,const unsigned int) {
     ar&BOOST_SERIALIZATION_NVP(m_symbols);
   }
-}; 
+};
 
 } // namespace iqfeed
 } // namespace tf

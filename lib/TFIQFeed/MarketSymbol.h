@@ -17,14 +17,17 @@
 #include <bitset>
 #include <string>
 
+#include <boost/date_time/gregorian/greg_date.hpp>
+
 #include <boost/archive/binary_oarchive.hpp>
 #include <boost/archive/binary_iarchive.hpp>
 
-#include <boost/cstdint.hpp>
+#include <OUSQL/Functions.h>
 
 #include <TFTrading/TradingEnumerations.h>
 
-#include <OUSQL/Functions.h>
+#include "SecurityType.h"
+#include "Fundamentals.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
@@ -37,24 +40,18 @@ namespace iqfeed { // IQFeed
 class MarketSymbol {
 public:
 
-  enum enumSymbolClassifier: boost::uint32_t { // bits in bitmap of stored data record
-    Unknown = 0, Bonds, Calc, Equity, FOption, Forex, Forward, Future, ICSpread, 
-      IEOption, Index, MktRpt, MktStats, Money, Mutual, PrecMtl, Spot, Spread, StratSpread, Swaps, Treasuries,
-      _Count
-  };
-
   struct TableRowDef {
 
     std::string sSymbol;
     std::string sDescription;
     std::string sExchange;
     std::string sListedMarket;
-    enumSymbolClassifier sc;
+    ESecurityType sc;
     boost::uint16_t nMultiplier;
     boost::uint32_t nSIC;
     boost::uint32_t nNAICS;
     std::string sUnderlying;
-    ou::tf::OptionSide::enumOptionSide eOptionSide;
+    ou::tf::OptionSide::EOptionSide eOptionSide;
     double dblStrike;
     boost::uint16_t nYear;
     boost::uint8_t nMonth;
@@ -82,8 +79,8 @@ public:
       ou::db::Field( a, "hasoptions", bHasOptions );
     }
 
-    TableRowDef(void): dblStrike( 0 ), nYear( 0 ), nMonth( 0 ), nDay( 0 ), 
-      sc( Unknown ), bFrontMonth( false ), bHasOptions( false ), nSIC( 0 ), nNAICS( 0 ), nMultiplier( 1 ),
+    TableRowDef(void): dblStrike( 0 ), nYear( 0 ), nMonth( 0 ), nDay( 0 ),
+      sc( ESecurityType::Unknown ), bFrontMonth( false ), bHasOptions( false ), nSIC( 0 ), nNAICS( 0 ), nMultiplier( 1 ),
       eOptionSide( ou::tf::OptionSide::Unknown ) {};
 
   private:
@@ -91,10 +88,10 @@ public:
     /* serialization support */
 
     friend class boost::serialization::access;
-    
+
     template<class Archive>
     void serialize(Archive& ar,const unsigned int) {
-      ar 
+      ar
         & BOOST_SERIALIZATION_NVP(sSymbol)
         & BOOST_SERIALIZATION_NVP(sDescription)
         & BOOST_SERIALIZATION_NVP(sExchange)
@@ -106,7 +103,7 @@ public:
         & BOOST_SERIALIZATION_NVP(eOptionSide)
         & BOOST_SERIALIZATION_NVP(dblStrike)
         & BOOST_SERIALIZATION_NVP(nYear)
-        & BOOST_SERIALIZATION_NVP(nMonth) 
+        & BOOST_SERIALIZATION_NVP(nMonth)
         & BOOST_SERIALIZATION_NVP(nDay)
         & BOOST_SERIALIZATION_NVP(bFrontMonth)
         & BOOST_SERIALIZATION_NVP(bHasOptions)
@@ -123,16 +120,28 @@ public:
     }
   };
 
-  MarketSymbol(void);
+  MarketSymbol();
   MarketSymbol( const TableRowDef& row ) : m_row( row ) {};
-  ~MarketSymbol(void);
+  ~MarketSymbol();
 
   const TableRowDef& GetRow( void ) const { return m_row; };
+
+  using Date = boost::gregorian::date;
+
+  // equity, ieoption (from trd)
+  const std::string static BuildGenericName( const std::string& sBaseName, const TableRowDef& );
+  // equity, ieoption, future, futures option (from fundamentals)
+  const std::string static BuildGenericName( const std::string& sBaseName, const TableRowDef&, Date );
+  // use fundamentals directly
+  const std::string static BuildGenericName( const TableRowDef&, const Fundamentals& );
+  // use fundamentals only
+  const std::string static BuildGenericName( const Fundamentals& );
+
+  const std::string static OptionBaseName( const Fundamentals& );
 
 protected:
 private:
   TableRowDef m_row;
-
 };
 
 } // namespace iqfeed

@@ -14,20 +14,21 @@
 
 #pragma once
 
-#include <vector>
 #include <map>
-#include <string>
 #include <set>
+#include <vector>
+#include <string>
 
 #include <OUCommon/FastDelegate.h>
 using namespace fastdelegate;
 
 #include <OUCommon/KeyWordMatch.h>
 
+#include "SecurityType.h"
+#include "ParseOptionSymbol.h"
 #include "ParseMktSymbolLine.h"
 #include "ParseOptionDescription.h"
 #include "ParseFOptionDescription.h"
-#include "ParseOptionSymbol.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
@@ -66,11 +67,11 @@ public:
 
   size_t LinesProcessed( void ) const { return cntLinesTotal; };
   void InsertParsedStructure( trd_t& trd ) {};  // override by inheriting class
-  bool HandleUpdateHasOption( const std::string& ) {}; // override by inheriting class
+  virtual bool HandleUpdateHasOption( const std::string& ) { return false; }; // override by inheriting class
 protected:
 private:
 
-  typedef ou::tf::iqfeed::MarketSymbol::enumSymbolClassifier sc_t;
+  using sc_t = ou::tf::iqfeed::ESecurityType;
 
   OnProcessLine_t m_OnProcessLine;
   OnProcessHasOption_t m_OnProcessHasOption;
@@ -140,10 +141,10 @@ void ValidateMktSymbolLine::Parse( Iterator& begin, Iterator& end ) {
 
       size_t ix;
 
-      vSymbolTypeStats[ trd.sc ]++;
+      vSymbolTypeStats[ (size_t)trd.sc ]++;
       if ( sc_t::Unknown == trd.sc ) {
         // set marker not to save record?
-        std::cout << "Unknown symbol type for:  " << trd.sSymbol << std::endl;
+//        std::cout << "Unknown symbol type for:  " << trd.sSymbol << std::endl;
       }
 
       std::string sPattern( trd.sExchange );
@@ -174,16 +175,16 @@ void ValidateMktSymbolLine::Parse( Iterator& begin, Iterator& end ) {
 
       bool bDecode( true );
       switch ( trd.sc ) {
-      case ou::tf::iqfeed::MarketSymbol::Equity:
+      case ou::tf::iqfeed::ESecurityType::Equity:
         if ( 0 != trd.nSIC ) cntSIC++;
         if ( 0 != trd.nNAICS ) cntNAICS++;
         break;
-      case ou::tf::iqfeed::MarketSymbol::Future:
+      case ou::tf::iqfeed::ESecurityType::Future:
         // parse out contract expiry information
         // � For combined session symbols, the first character is "+".
         //� For Night/Electronic sessions, the first character is "@".
         // � Replace the Month and Year code with "#" for Front Month (ie. @ES# instead of @ESU10).
-        // � NEW!-Replace the Month and Year code with "#C" for Front Month back-adjusted history (ie. @ES#C instead of @ESU10). 
+        // � NEW!-Replace the Month and Year code with "#C" for Front Month back-adjusted history (ie. @ES#C instead of @ESU10).
         // http://www.iqfeed.net/symbolguide/index.cfm?symbolguide=guide&displayaction=support&section=guide&web=iqfeed&guide=commod&web=IQFeed&symbolguide=guide&displayaction=support&section=guide&type=comex&type2=comex_gbx
         bDecode = true;
   //          if ( '+' == sSymbol[0] ) {
@@ -205,20 +206,20 @@ void ValidateMktSymbolLine::Parse( Iterator& begin, Iterator& end ) {
           }
         }
         break;
-      case ou::tf::iqfeed::MarketSymbol::FOption:
+      case ou::tf::iqfeed::ESecurityType::FOption:
         ParseFOptionContractInformation( trd );
         break;
-      case ou::tf::iqfeed::MarketSymbol::IEOption:
+      case ou::tf::iqfeed::ESecurityType::IEOption:
         ParseOptionContractInformation( trd );
         break;
       } // switch( trd.sc )
 
 
       if ( 0 == trd.sDescription.length() ) {
-        std::cout << trd.sSymbol << ": missing description" << std::endl;
+//        std::cout << trd.sSymbol << ": missing description" << std::endl;
       }
 
-      if ( 0 != m_OnProcessLine ) m_OnProcessLine( trd );
+      if ( nullptr != m_OnProcessLine ) m_OnProcessLine( trd );
 //      if ( &ValidateMktSymbolLine<CRTP,IteratorLines>::InsertParsedStructure != &CRTP::InsertParsedStructure ) {
 //        static_cast<CRTP*>( this )->InsertParsedStructure( trd );
 //      }

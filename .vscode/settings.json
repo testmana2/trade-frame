@@ -1,0 +1,16 @@
+{
+  "clangd.arguments": [
+    ],
+  "C_Cpp.autocomplete": "disabled",
+  "C_Cpp.formatting": "disabled",
+  "C_Cpp.errorSquiggles": "disabled",
+  "C_Cpp.intelliSenseEngine": "disabled",
+  "C_Cpp.default.intelliSenseMode": "clang-x64",
+  "C_Cpp.codeAnalysis.runAutomatically": false,
+  "editor.tabSize": 2,
+  "files.associations": {
+    "*.ipp": "cpp"
+  },
+  "cmake.copyCompileCommands": "${workspaceFolder}/compile_commands.json",
+  "clangd.checkUpdates": true
+}

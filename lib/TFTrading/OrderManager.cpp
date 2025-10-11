@@ -11,8 +11,6 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <OUCommon/TimeSource.h>
 
 #include "OrderManager.h"
@@ -24,13 +22,10 @@ namespace tf { // TradeFrame
 // OrderManager
 //
 
-OrderManager::OrderManager(void) 
-//: 
-//   m_orderIds( Trading::DbFileName, "OrderId" )  // need to remove dependency on DB4 and migrate to sql
-{
+OrderManager::OrderManager() {
 }
 
-OrderManager::~OrderManager(void) {
+OrderManager::~OrderManager() {
 }
 
 Order::idOrder_t OrderManager::CheckOrderId( idOrder_t id ) {
@@ -42,85 +37,135 @@ Order::idOrder_t OrderManager::CheckOrderId( idOrder_t id ) {
 }
 
 OrderManager::pOrder_t OrderManager::ConstructOrder( // market order
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
-    boost::uint32_t nOrderQuantity, 
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
+    boost::uint32_t nOrderQuantity,
     idPosition_t idPosition
     ) {
   assert( nOrderQuantity > 0 );
-  pOrder_t pOrder( new Order( instrument,  eOrderType, eOrderSide, nOrderQuantity, idPosition ) );
-  ConstructOrder( pOrder );
+  pOrder_t pOrder = std::make_shared<ou::tf::Order>( instrument,  eOrderType, eOrderSide, nOrderQuantity, idPosition );
+  if ( ConstructOrder( pOrder ) ) {}
+  else {
+    pOrder.reset();
+  }
   return pOrder;
 }
 
 OrderManager::pOrder_t OrderManager::ConstructOrder( // limit or stop
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
-    boost::uint32_t nOrderQuantity, double dblPrice1,  
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
+    boost::uint32_t nOrderQuantity, double dblPrice1,
     idPosition_t idPosition
     ) {
   assert( nOrderQuantity > 0 );
   assert( dblPrice1 > 0 );
-  pOrder_t pOrder( new Order( instrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, idPosition ) );
-  ConstructOrder( pOrder );
+  pOrder_t pOrder = std::make_shared<ou::tf::Order>( instrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, idPosition );
+  if ( ConstructOrder( pOrder ) ) {}
+  else {
+    pOrder.reset();
+  }
   return pOrder;
 }
 
 OrderManager::pOrder_t OrderManager::ConstructOrder( // limit and stop
-    Instrument::pInstrument_cref instrument, 
-    OrderType::enumOrderType eOrderType, OrderSide::enumOrderSide eOrderSide, 
+    Instrument::pInstrument_cref instrument,
+    OrderType::EOrderType eOrderType, OrderSide::EOrderSide eOrderSide,
     boost::uint32_t nOrderQuantity, double dblPrice1, double dblPrice2,
     idPosition_t idPosition
     ) {
   assert( nOrderQuantity > 0 );
   assert( dblPrice1 > 0 );
   assert( dblPrice2 > 0 );
-  pOrder_t pOrder( new Order( instrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, idPosition ) );
-  ConstructOrder( pOrder );
+  pOrder_t pOrder = std::make_shared<ou::tf::Order>( instrument, eOrderType, eOrderSide, nOrderQuantity, dblPrice1, dblPrice2, idPosition );
+  if ( ConstructOrder( pOrder ) ) {}
+  else {
+    pOrder.reset();
+  }
   return pOrder;
 }
 
-void OrderManager::ConstructOrder( pOrder_t& pOrder ) {
-  // obtain an order id, then insert into maps, may need to change how this happens later in order to get rid of db4
-  idOrder_t id = m_orderIds.GetNextId();
-  pOrder->SetOrderId( id );
-  // need to create an exception free way to check that order does not exist, in the meantime:
-  try {
-    iterOrders_t iter;
-    if ( LocateOrder( id, iter ) ) {
-      std::cout << "OrderManager::ConstructOrder:  OrderId Already Exists" << std::endl;
+bool OrderManager::ConstructOrder( pOrder_t& pOrder ) {
+  // obtain an order id, then insert into maps
+
+  bool bOk( false );
+  idOrder_t idOrder {};
+  iterOrders_t iterOrder;
+
+  // repeat attempt for unused order, skip broken ones (when program crashes or is halted with order recorded)
+  for ( unsigned int cnt = 0; cnt < 5; cnt++ ) {
+    idOrder = m_orderIds.GetNextId();
+    if ( LocateOrder( idOrder, iterOrder ) ) {
+      // try again
     }
     else {
-      pairOrderState_t pair( id, structOrderState( pOrder ) );
+      bOk = true;
+      break;
+    }
+  }
+
+  if ( bOk ) {
+    bOk = false;  // reset for another go at it
+    pOrder->SetOrderId( idOrder );
+    try {
+      pairOrderState_t pair( idOrder, structOrderState( pOrder ) );
       m_mapOrders.insert( pair );
 
-      if ( 0 != m_pSession ) {
-        // add to database
+      if ( nullptr != m_pSession ) { // add to database
         assert( 0 != pOrder->GetRow().idPosition );
         ou::db::QueryFields<Order::TableRowDef>::pQueryFields_t pQuery
           = m_pSession->Insert<Order::TableRowDef>( const_cast<Order::TableRowDef&>( pOrder->GetRow() ) );
       }
+      bOk = true;
+    }
+    catch (...) {
+      std::cout << "OrderManager::ConstructOrder:  Major Problems" << std::endl;
     }
   }
-  catch (...) {
-    std::cout << "OrderManager::ConstructOrder:  Major Problems" << std::endl;
+  else {
+    std::cout << "OrderManager::ConstructOrder:  can't find unused order id" << std::endl;
   }
-  
+  return bOk;
 }
 
 namespace OrderManagerQueries {
-  struct UpdateAtPlaceOrder {
+  struct UpdateAtPlaceOrder1 {
     template<class A>
     void Fields( A& a ) {
+      ou::db::Field( a, "timeinforce", eTimeInForce );
+      ou::db::Field( a, "goodtilldate", dtGoodTillDate );
+      ou::db::Field( a, "goodaftertime", dtGoodAfterTime );
+      ou::db::Field( a, "parentid", idParent );
+      ou::db::Field( a, "transmit", bTransmit );
+      ou::db::Field( a, "outsiderth", bOutsideRTH );
       ou::db::Field( a, "orderstatus", eOrderStatus );
       ou::db::Field( a, "datetimesubmitted", dtOrderSubmitted );
+      ou::db::Field( a, "signalprice", dblSignalPrice );
+      ou::db::Field( a, "description", sDescription );
       ou::db::Field( a, "orderid", idOrder );
     }
+
     Order::idOrder_t idOrder;
+    ETimeInForce eTimeInForce;
+    ptime dtGoodTillDate;
+    ptime dtGoodAfterTime;
+    Order::idOrder_t idParent;
+    bool bTransmit;
+    bool bOutsideRTH;
+    OrderStatus::EOrderStatus eOrderStatus;
     ptime dtOrderSubmitted;
-    OrderStatus::enumOrderStatus eOrderStatus;
-    UpdateAtPlaceOrder( Order::idOrder_t id, OrderStatus::enumOrderStatus status, ptime dtOrderSubmitted_ )
-      : idOrder( id ), dtOrderSubmitted( dtOrderSubmitted_ ), eOrderStatus( status ) {};
+    double dblSignalPrice;
+    std::string sDescription;
+
+    UpdateAtPlaceOrder1(
+      ETimeInForce eTimeInForce_, ptime dtGoodTillDate_, ptime dtGoodAfterTime_
+    , Order::idOrder_t idParent_, bool bTransmit_, bool bOutsideRTH_
+    , Order::idOrder_t id, OrderStatus::EOrderStatus status, ptime dtOrderSubmitted_
+    , double dblSignalPrice_, const std::string& sDescription_
+    )
+    : eTimeInForce( eTimeInForce_ ), dtGoodTillDate( dtGoodTillDate_ ), dtGoodAfterTime( dtGoodAfterTime_ )
+    , idParent( idParent_ ), bTransmit( bTransmit_ ), bOutsideRTH( bOutsideRTH_ )
+    , idOrder( id ), dtOrderSubmitted( dtOrderSubmitted_ ), eOrderStatus( status )
+    , dblSignalPrice( dblSignalPrice_ ), sDescription( sDescription_) {};
   };
 }
 
@@ -133,12 +178,22 @@ void OrderManager::PlaceOrder(ProviderInterfaceBase *pProvider, pOrder_t pOrder)
       iter->second.pProvider = pProvider;
       pOrder->SetSendingToProvider();
       pProvider->PlaceOrder( pOrder );
-      if ( 0 != m_pSession ) {
-        OrderManagerQueries::UpdateAtPlaceOrder 
-          update( pOrder->GetOrderId(), pOrder->GetRow().eOrderStatus, pOrder->GetRow().dtOrderSubmitted );
-        ou::db::QueryFields<OrderManagerQueries::UpdateAtPlaceOrder>::pQueryFields_t pQuery
-          = m_pSession->SQL<OrderManagerQueries::UpdateAtPlaceOrder>( // todo:  cache this query
-            "update orders set orderstatus=?, datetimesubmitted=?", update ).Where( "orderid=?" );
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateAtPlaceOrder1
+          update(
+            pOrder->GetTimeInForce(), pOrder->GetGoodTillDate(), pOrder->GetGoodAfterTime()
+            , pOrder->GetParentOrderId(), pOrder->GetTransmit(), pOrder->GetOutsideRTH()
+            , pOrder->GetOrderId(), pOrder->GetRow().eOrderStatus, pOrder->GetRow().dtOrderSubmitted
+            , pOrder->GetRow().dblSignalPrice, pOrder->GetRow().sDescription
+          );
+        ou::db::QueryFields<OrderManagerQueries::UpdateAtPlaceOrder1>::pQueryFields_t pQuery
+          = m_pSession->SQL<OrderManagerQueries::UpdateAtPlaceOrder1>( // todo:  cache this query
+            "update orders set"
+            " timeinforce=?, goodtilldate=?, goodaftertime=?"
+            ", parentid=?, transmit=?, outsiderth=?"
+            ", orderstatus=?, datetimesubmitted=?"
+            ", signalprice=?, description=?"
+            , update ).Where( "orderid=?" );
       }
     }
     else {
@@ -147,6 +202,48 @@ void OrderManager::PlaceOrder(ProviderInterfaceBase *pProvider, pOrder_t pOrder)
   }
   catch (...) {
     std::cout << "OrderManager::PlaceOrder:  Major Problems" << std::endl;
+  }
+}
+
+namespace OrderManagerQueries {
+  struct UpdateAtPlaceOrder2 {
+    template<class A>
+    void Fields( A& a ) {
+      ou::db::Field( a, "price1", dblPrice1 );
+      ou::db::Field( a, "price2", dblPrice2 );
+      ou::db::Field( a, "orderid", idOrder );
+    }
+    Order::idOrder_t idOrder;
+    double dblPrice1;
+    double dblPrice2;
+    UpdateAtPlaceOrder2( Order::idOrder_t id, double dblPrice1_, double dblPrice2_ )
+      : idOrder( id ), dblPrice1( dblPrice1_ ), dblPrice2( dblPrice2_ ) {};
+  };
+}
+
+void OrderManager::UpdateOrder(ProviderInterfaceBase *pProvider, pOrder_t pOrder) {
+
+  try {
+    iterOrders_t iter;
+    if ( LocateOrder( pOrder->GetOrderId(), iter ) ) {
+      assert( NULL != pProvider );
+      iter->second.pProvider = pProvider;
+      //pOrder->SetSendingToProvider();  // will generate assertion error
+      pProvider->PlaceOrder( pOrder );  // for Interactive Brokers, can 'place' again to update, given same order number
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateAtPlaceOrder2
+          update( pOrder->GetOrderId(), pOrder->GetRow().dblPrice1, pOrder->GetRow().dblPrice2 );
+        ou::db::QueryFields<OrderManagerQueries::UpdateAtPlaceOrder2>::pQueryFields_t pQuery
+          = m_pSession->SQL<OrderManagerQueries::UpdateAtPlaceOrder2>( // todo:  cache this query
+            "update orders set price1=?, price2=?", update ).Where( "orderid=?" );
+      }
+    }
+    else {
+      std::cout << "OrderManager::UpdateOrder:  OrderId Not Found" << std::endl;
+    }
+  }
+  catch (...) {
+    std::cout << "OrderManager::UpdateOrder:  Major Problems" << std::endl;
   }
 }
 
@@ -180,7 +277,7 @@ bool OrderManager::LocateOrder( idOrder_t nOrderId, iterOrders_t& iter ) {
   }
   else {
     // check in database first, and if found, load order and executions
-    if ( 0 != m_pSession ) {
+    if ( nullptr != m_pSession ) {
       OrderManagerQueries::OrderKey keyOrder( nOrderId );
       ou::db::QueryFields<OrderManagerQueries::OrderKey>::pQueryFields_t pOrderExistsQuery
         = m_pSession->SQL<OrderManagerQueries::OrderKey>( "select * from orders", keyOrder ).Where( "orderid=?" ).NoExecute();
@@ -195,7 +292,7 @@ bool OrderManager::LocateOrder( idOrder_t nOrderId, iterOrders_t& iter ) {
         }
         pInstrument_t pInstrument;
         OnOrderNeedsDetails( rowOrder.idInstrument, pInstrument );
-        pOrder_t pOrder( new Order( rowOrder, pInstrument ) );
+        pOrder_t pOrder = std::make_shared<ou::tf::Order>( rowOrder, pInstrument );
         std::pair<iterOrders_t, bool> response;
         response = m_mapOrders.insert( pairOrderState_t(rowOrder.idOrder, structOrderState( pOrder ) ) );
         if ( false == response.second ) {
@@ -209,7 +306,7 @@ bool OrderManager::LocateOrder( idOrder_t nOrderId, iterOrders_t& iter ) {
         while ( m_pSession->Execute( pExecutionQuery ) ) {
           Execution::TableRowDef rowExecution;
           m_pSession->Columns<OrderManagerQueries::OrderKey, Execution::TableRowDef>( pExecutionQuery, rowExecution );
-          pExecution_t pExecution( new Execution( rowExecution ) );
+          pExecution_t pExecution = std::make_shared<ou::tf::Execution>( rowExecution );
           iter->second.pmapExecutions->insert( pairExecution_t( rowExecution.idExecution, pExecution ) );
         }
       }
@@ -233,8 +330,8 @@ namespace OrderManagerQueries {
     }
     Order::idOrder_t idOrder;
     ptime dtOrderClosed;
-    OrderStatus::enumOrderStatus eOrderStatus;
-    UpdateAtOrderClose( Order::idOrder_t id, OrderStatus::enumOrderStatus status, ptime dtOrderClosed_ )
+    OrderStatus::EOrderStatus eOrderStatus;
+    UpdateAtOrderClose( Order::idOrder_t id, OrderStatus::EOrderStatus status, ptime dtOrderClosed_ )
       : idOrder( id ), dtOrderClosed( dtOrderClosed_ ), eOrderStatus( status ) {};
   };
 }
@@ -261,8 +358,8 @@ void OrderManager::ReportCancellation( idOrder_t nOrderId ) {
     if ( LocateOrder( nOrderId, iter ) ) {
       pOrder_t pOrder = iter->second.pOrder;
       pOrder->MarkAsCancelled();
-      if ( 0 != m_pSession ) {
-        OrderManagerQueries::UpdateAtOrderClose 
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateAtOrderClose
           close( pOrder->GetOrderId(), pOrder->GetRow().eOrderStatus, pOrder->GetRow().dtOrderClosed );
         ou::db::QueryFields<OrderManagerQueries::UpdateAtOrderClose>::pQueryFields_t pQuery
           = m_pSession->SQL<OrderManagerQueries::UpdateAtOrderClose>( // todo:  cache this query
@@ -289,35 +386,35 @@ namespace OrderManagerQueries {
       ou::db::Field( a, "datetimeclosed", dtClosed );
       ou::db::Field( a, "orderid", idOrder );
     }
-    OrderStatus::enumOrderStatus eOrderStatus;
+    OrderStatus::EOrderStatus eOrderStatus;
     boost::uint32_t nQuantityRemaining;
     boost::uint32_t nQuantityFilled;
     ptime dtClosed;
     double dblAverageFillPrice;
     Order::idOrder_t idOrder;
-    UpdateOrder( Order::idOrder_t idOrder_, OrderStatus::enumOrderStatus eOrderStatus_, 
+    UpdateOrder( Order::idOrder_t idOrder_, OrderStatus::EOrderStatus eOrderStatus_,
       boost::uint32_t nQuantityRemaining_, boost::uint32_t nQuantityFilled_, double dblAverageFillPrice_, ptime dtClosed_ = boost::date_time::not_a_date_time )
-      : idOrder( idOrder_ ), eOrderStatus( eOrderStatus_ ), 
-      nQuantityRemaining( nQuantityRemaining_ ), nQuantityFilled( nQuantityFilled_ ), 
+      : idOrder( idOrder_ ), eOrderStatus( eOrderStatus_ ),
+      nQuantityRemaining( nQuantityRemaining_ ), nQuantityFilled( nQuantityFilled_ ),
       dblAverageFillPrice( dblAverageFillPrice_ ), dtClosed( dtClosed_ ) {};
   };
 
   std::string sUpdateOrderQuery( "update orders set orderstatus=?, quantityremaining=?, quantityfilled=?, averagefillprice=?, datetimeclosed=?" );
 }
 
-void OrderManager::ReportExecution( idOrder_t nOrderId, const Execution& exec) { 
+void OrderManager::ReportExecution( idOrder_t nOrderId, const Execution& exec) {
   try {
     mapOrders_t::iterator iter;
     if ( LocateOrder( nOrderId, iter ) ) {
       pOrder_t pOrder = iter->second.pOrder;
-      OrderStatus::enumOrderStatus status = pOrder->ReportExecution( exec );
-      if ( 0 != m_pSession ) {
+      OrderStatus::EOrderStatus status = pOrder->ReportExecution( exec );
+      if ( nullptr != m_pSession ) {
         const Order::TableRowDef& row( pOrder->GetRow() );
         switch ( status ) {
         case OrderStatus::CancelledWithPartialFill:
         case OrderStatus::Filled:
           {
-            OrderManagerQueries::UpdateOrder 
+            OrderManagerQueries::UpdateOrder
               order( nOrderId, row.eOrderStatus, row.nQuantityRemaining, row.nQuantityFilled, row.dblAverageFillPrice, ou::TimeSource::LocalCommonInstance().Internal() );
             ou::db::QueryFields<OrderManagerQueries::UpdateOrder>::pQueryFields_t pQuery
               = m_pSession->SQL<OrderManagerQueries::UpdateOrder>( // todo:  cache this query
@@ -326,7 +423,7 @@ void OrderManager::ReportExecution( idOrder_t nOrderId, const Execution& exec) {
           break;
         default:
           {
-            OrderManagerQueries::UpdateOrder 
+            OrderManagerQueries::UpdateOrder
               order( nOrderId, row.eOrderStatus, row.nQuantityRemaining, row.nQuantityFilled, row.dblAverageFillPrice );
             ou::db::QueryFields<OrderManagerQueries::UpdateOrder>::pQueryFields_t pQuery
               = m_pSession->SQL<OrderManagerQueries::UpdateOrder>( // todo:  cache this query
@@ -335,10 +432,10 @@ void OrderManager::ReportExecution( idOrder_t nOrderId, const Execution& exec) {
           break;
         }
         // add execution record
-        pExecution_t pExecution( new Execution( exec ) );
+        pExecution_t pExecution = std::make_shared<ou::tf::Execution>( exec );
         pExecution->SetOrderId( nOrderId );
         ou::db::QueryFields<Execution::TableRowDefNoKey>::pQueryFields_t pQueryExecutionWrite
-          = m_pSession->Insert<Execution::TableRowDefNoKey>( 
+          = m_pSession->Insert<Execution::TableRowDefNoKey>(
             const_cast<Execution::TableRowDefNoKey&>( dynamic_cast<const Execution::TableRowDefNoKey&>( pExecution->GetRow() ) ) );
         idExecution_t idExecution = m_pSession->GetLastRowId();
         pairExecution_t pair( idExecution, pExecution );
@@ -378,8 +475,8 @@ void OrderManager::ReportCommission( idOrder_t nOrderId, double dblCommission ) 
     mapOrders_t::iterator iter;
     if ( LocateOrder( nOrderId, iter ) ) {
       pOrder_t pOrder = iter->second.pOrder;
-      if ( 0 != m_pSession ) {
-        OrderManagerQueries::UpdateCommission 
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateCommission
           commission( pOrder->GetOrderId(), dblCommission );
         ou::db::QueryFields<OrderManagerQueries::UpdateCommission>::pQueryFields_t pQuery
           = m_pSession->SQL<OrderManagerQueries::UpdateCommission>( // todo:  cache this query
@@ -407,21 +504,21 @@ namespace OrderManagerQueries {
     }
     Order::idOrder_t idOrder;
     ptime dtOrderClosed;
-    OrderStatus::enumOrderStatus eOrderStatus;
-    UpdateOnOrderError( Order::idOrder_t id, OrderStatus::enumOrderStatus status, ptime dtOrderClosed_ )
+    OrderStatus::EOrderStatus eOrderStatus;
+    UpdateOnOrderError( Order::idOrder_t id, OrderStatus::EOrderStatus status, ptime dtOrderClosed_ )
       : idOrder( id ), dtOrderClosed( dtOrderClosed_ ), eOrderStatus( status ) {};
   };
 }
 
-void OrderManager::ReportErrors( idOrder_t nOrderId, OrderErrors::enumOrderErrors eError) {
+void OrderManager::ReportErrors( idOrder_t nOrderId, OrderError::EOrderError eError) {
   try {
     mapOrders_t::iterator iter;
     if ( LocateOrder( nOrderId, iter ) ) {
       pOrder_t pOrder = iter->second.pOrder;
       pOrder->ActOnError( eError );
       //MoveActiveOrderToCompleted( nOrderId );
-      if ( 0 != m_pSession ) {
-        OrderManagerQueries::UpdateOnOrderError 
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateOnOrderError
           error( pOrder->GetOrderId(), pOrder->GetRow().eOrderStatus, pOrder->GetRow().dtOrderClosed );
         ou::db::QueryFields<OrderManagerQueries::UpdateOnOrderError>::pQueryFields_t pQuery
           = m_pSession->SQL<OrderManagerQueries::UpdateOnOrderError>( // todo:  cache this query
@@ -434,6 +531,42 @@ void OrderManager::ReportErrors( idOrder_t nOrderId, OrderErrors::enumOrderError
   }
   catch (...) {
     std::cout << "OrderManager::ReportErrors:  Major Problems" << std::endl;
+  }
+}
+
+namespace OrderManagerQueries {
+  struct UpdateReference {
+    template<typename A>
+    void Fields( A& a ) {
+      ou::db::Field( a, "reference", sReference );
+      ou::db::Field( a, "orderid", idOrder );
+    }
+    Order::idOrder_t idOrder;
+    const std::string& sReference;
+    UpdateReference( Order::idOrder_t idOrder_, const std::string& sReference_ )
+    : idOrder( idOrder_ ), sReference( sReference_ ) {}
+  };
+}
+
+void OrderManager::UpdateReference( idOrder_t idOrder, const std::string& sReference ) {
+  try {
+    mapOrders_t::iterator iter;
+    if ( LocateOrder( idOrder, iter ) ) {
+      pOrder_t pOrder = iter->second.pOrder;
+      pOrder->SetReference( sReference );
+      if ( nullptr != m_pSession ) {
+        OrderManagerQueries::UpdateReference reference( idOrder, sReference );
+        ou::db::QueryFields<OrderManagerQueries::UpdateReference>::pQueryFields_t pQuery
+          = m_pSession->SQL<OrderManagerQueries::UpdateReference>( // todo:  cache this query
+            "update orders set reference=?", reference ).Where( "orderid=?" );
+      }
+    }
+    else {
+      std::cout << "OrderManager::UpdateReference: idOrder not found: " << idOrder << std::endl;
+    }
+  }
+  catch (...) {
+    std::cout << "OrderManager::UpdateReference: major error with " << idOrder << std::endl;
   }
 }
 
@@ -451,19 +584,48 @@ void OrderManager::HandleRegisterRows( ou::db::Session& session ) {
 void OrderManager::HandlePopulateTables( ou::db::Session& session ) {
 }
 
+namespace OrderManagerQueries {
+  struct ColumnMaxOrderId {
+    template<typename A>
+    void Fields( A& a ) {
+      ou::db::Field( a, "orderid", idOrder );
+    }
+    Order::idOrder_t idOrder;
+  };
+}
+
+void OrderManager::HandleLoadTables( ou::db::Session& session ) {
+  try {
+    ou::db::QueryFields<ou::db::NoBind>::pQueryFields_t pQuery
+      = m_pSession->SQL<ou::db::NoBind>( "select max(orderid) as orderid from orders;" ); // immediately executed
+    OrderManagerQueries::ColumnMaxOrderId result;
+    m_pSession->Columns<ou::db::NoBind,OrderManagerQueries::ColumnMaxOrderId>( pQuery, result );
+    ou::tf::Order::idOrder_t idOld = CheckOrderId( result.idOrder ); // produces 0 when no orders present
+    std::cout
+      << "OrderManager::HandleLoadTables order id: "
+      << idOld << "(default), "
+      << result.idOrder << "(table)"
+      << std::endl;
+  }
+  catch ( const std::runtime_error& error ) {
+    std::cout << "OrderManager::HandleLoadTables: no orders found, " << error.what() << std::endl;
+  }
+}
+
 // this stuff could probably be rolled into Session with a template
 void OrderManager::AttachToSession( ou::db::Session* pSession ) {
   ManagerBase::AttachToSession( pSession );
   pSession->OnRegisterTables.Add( MakeDelegate( this, &OrderManager::HandleRegisterTables ) );
   pSession->OnRegisterRows.Add( MakeDelegate( this, &OrderManager::HandleRegisterRows ) );
   pSession->OnPopulate.Add( MakeDelegate( this, &OrderManager::HandlePopulateTables ) );
-
+  pSession->OnLoad.Add( MakeDelegate( this, &OrderManager::HandleLoadTables ) );
 }
 
 void OrderManager::DetachFromSession( ou::db::Session* pSession ) {
   pSession->OnRegisterTables.Remove( MakeDelegate( this, &OrderManager::HandleRegisterTables ) );
   pSession->OnRegisterRows.Remove( MakeDelegate( this, &OrderManager::HandleRegisterRows ) );
   pSession->OnPopulate.Remove( MakeDelegate( this, &OrderManager::HandlePopulateTables ) );
+  pSession->OnLoad.Remove( MakeDelegate( this, &OrderManager::HandleLoadTables ) );
   ManagerBase::DetachFromSession( pSession );
 }
 

@@ -12,7 +12,9 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
+#include <wx/sizer.h>
+#include <wx/button.h>
+#include <wx/stattext.h>
 
 #include "PanelProviderControl.h"
 
@@ -23,7 +25,7 @@ wxDEFINE_EVENT( EVT_ProviderIB, UpdateProviderStatusEvent );
 wxDEFINE_EVENT( EVT_ProviderIQFeed, UpdateProviderStatusEvent );
 wxDEFINE_EVENT( EVT_ProviderSimulator, UpdateProviderStatusEvent );
 
-PanelProviderControl::PanelProviderControl(void) {
+PanelProviderControl::PanelProviderControl() {
   Init();
 }
 
@@ -32,7 +34,7 @@ PanelProviderControl::PanelProviderControl( wxWindow* parent, wxWindowID id, con
   Create(parent, id, pos, size, style);
 }
 
-PanelProviderControl::~PanelProviderControl(void) {
+PanelProviderControl::~PanelProviderControl() {
 }
 
 bool PanelProviderControl::Create( wxWindow* parent, wxWindowID id, const wxPoint& pos, const wxSize& size, long style ) {
@@ -49,7 +51,7 @@ bool PanelProviderControl::Create( wxWindow* parent, wxWindowID id, const wxPoin
   return true;
 }
 
-void PanelProviderControl::Init( void ) {
+void PanelProviderControl::Init() {
 //  m_nProvidersOn = 0;
 //  m_bDisabling = false;
     m_cbIQFeedD2 = NULL;
@@ -68,79 +70,81 @@ void PanelProviderControl::Init( void ) {
   m_stateSimulator = ProviderOff;
 }
 
-void PanelProviderControl::CreateControls( void ) {
+void PanelProviderControl::CreateControls() {
 
   // radio buttons could be auto-enabled based upon how provider indicates data, execution capability flags
 
-  PanelProviderControl* itemFrame1 = this;
+  PanelProviderControl* itemPanel1 = this;
 
     wxBoxSizer* itemBoxSizer2 = new wxBoxSizer(wxVERTICAL);
-    itemFrame1->SetSizer(itemBoxSizer2);
+    itemPanel1->SetSizer(itemBoxSizer2);
 
     wxBoxSizer* itemBoxSizer3 = new wxBoxSizer(wxHORIZONTAL);
     itemBoxSizer2->Add(itemBoxSizer3, 0, wxALIGN_LEFT|wxALL, 5);
 
-    m_cbIQFeedD1 = new wxCheckBox( itemFrame1, ID_CB_IQF_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIQFeedD1 = new wxCheckBox( itemPanel1, ID_CB_IQF_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIQFeedD1->SetValue(true);
     itemBoxSizer3->Add(m_cbIQFeedD1, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxTOP|wxBOTTOM, 5);
 
-    m_cbIQFeedD2 = new wxCheckBox( itemFrame1, ID_CB_IQF_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIQFeedD2 = new wxCheckBox( itemPanel1, ID_CB_IQF_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIQFeedD2->SetValue(false);
     itemBoxSizer3->Add(m_cbIQFeedD2, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_cbIQFeedX = new wxCheckBox( itemFrame1, ID_CB_IQF_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIQFeedX = new wxCheckBox( itemPanel1, ID_CB_IQF_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIQFeedX->SetValue(false);
-    m_cbIQFeedX->Enable(false);
     itemBoxSizer3->Add(m_cbIQFeedX, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_btnIQFeed = new wxButton( itemFrame1, ID_BtnIQFeed, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnIQFeed = new wxButton( itemPanel1, ID_BtnIQFeed, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnIQFeed->Enable(false);
     itemBoxSizer3->Add(m_btnIQFeed, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-    wxStaticText* itemStaticText8 = new wxStaticText( itemFrame1, wxID_LblIQFeed, _("IQF"), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer3->Add(itemStaticText8, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    wxStaticText* itemStaticText9 = new wxStaticText( itemPanel1, wxID_LblIQFeed, _("IQF"), wxDefaultPosition, wxDefaultSize, 0 );
+    itemBoxSizer3->Add(itemStaticText9, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-    wxBoxSizer* itemBoxSizer9 = new wxBoxSizer(wxHORIZONTAL);
-    itemBoxSizer2->Add(itemBoxSizer9, 0, wxALIGN_LEFT|wxALL, 5);
+    wxBoxSizer* itemBoxSizer10 = new wxBoxSizer(wxHORIZONTAL);
+    itemBoxSizer2->Add(itemBoxSizer10, 0, wxALIGN_LEFT|wxALL, 5);
 
-    m_cbIBD1 = new wxCheckBox( itemFrame1, ID_CB_IB_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIBD1 = new wxCheckBox( itemPanel1, ID_CB_IB_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIBD1->SetValue(false);
-    itemBoxSizer9->Add(m_cbIBD1, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer10->Add(m_cbIBD1, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxTOP|wxBOTTOM, 5);
 
-    m_cbIBD2 = new wxCheckBox( itemFrame1, ID_CB_IB_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIBD2 = new wxCheckBox( itemPanel1, ID_CB_IB_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIBD2->SetValue(true);
-    itemBoxSizer9->Add(m_cbIBD2, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer10->Add(m_cbIBD2, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_cbIBX = new wxCheckBox( itemFrame1, ID_CB_IB_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbIBX = new wxCheckBox( itemPanel1, ID_CB_IB_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbIBX->SetValue(true);
-    itemBoxSizer9->Add(m_cbIBX, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer10->Add(m_cbIBX, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_btnIB = new wxButton( itemFrame1, ID_BtnInteractiveBrokers, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer9->Add(m_btnIB, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_btnIB = new wxButton( itemPanel1, ID_BtnInteractiveBrokers, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnIB->Enable(false);
+    itemBoxSizer10->Add(m_btnIB, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-    wxStaticText* itemStaticText14 = new wxStaticText( itemFrame1, wxID_LblInteractiveBrokers, _("IB"), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer9->Add(itemStaticText14, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    wxStaticText* itemStaticText15 = new wxStaticText( itemPanel1, wxID_LblInteractiveBrokers, _("IB"), wxDefaultPosition, wxDefaultSize, 0 );
+    itemBoxSizer10->Add(itemStaticText15, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-    wxBoxSizer* itemBoxSizer15 = new wxBoxSizer(wxHORIZONTAL);
-    itemBoxSizer2->Add(itemBoxSizer15, 0, wxALIGN_LEFT|wxALL, 5);
+    wxBoxSizer* itemBoxSizer16 = new wxBoxSizer(wxHORIZONTAL);
+    itemBoxSizer2->Add(itemBoxSizer16, 0, wxALIGN_LEFT|wxALL, 5);
 
-    m_cbSimD1 = new wxCheckBox( itemFrame1, ID_CB_SIM_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbSimD1 = new wxCheckBox( itemPanel1, ID_CB_SIM_D1, _("D1"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbSimD1->SetValue(false);
-    itemBoxSizer15->Add(m_cbSimD1, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer16->Add(m_cbSimD1, 0, wxALIGN_CENTER_VERTICAL|wxLEFT|wxTOP|wxBOTTOM, 5);
 
-    m_cbSimD2 = new wxCheckBox( itemFrame1, ID_CB_SIM_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbSimD2 = new wxCheckBox( itemPanel1, ID_CB_SIM_D2, _("D2"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbSimD2->SetValue(false);
     m_cbSimD2->Enable(false);
-    itemBoxSizer15->Add(m_cbSimD2, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer16->Add(m_cbSimD2, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_cbSimX = new wxCheckBox( itemFrame1, ID_CB_SIM_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_cbSimX = new wxCheckBox( itemPanel1, ID_CB_SIM_X, _("X"), wxDefaultPosition, wxDefaultSize, 0 );
     m_cbSimX->SetValue(false);
-    itemBoxSizer15->Add(m_cbSimX, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
+    itemBoxSizer16->Add(m_cbSimX, 0, wxALIGN_CENTER_VERTICAL|wxTOP|wxBOTTOM, 5);
 
-    m_btnSimulator = new wxButton( itemFrame1, ID_BtnSimulation, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer15->Add(m_btnSimulator, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    m_btnSimulator = new wxButton( itemPanel1, ID_BtnSimulation, _("Turn On"), wxDefaultPosition, wxDefaultSize, 0 );
+    m_btnSimulator->Enable(false);
+    itemBoxSizer16->Add(m_btnSimulator, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
-    wxStaticText* itemStaticText20 = new wxStaticText( itemFrame1, wxID_LblSimulation, _("Sim"), wxDefaultPosition, wxDefaultSize, 0 );
-    itemBoxSizer15->Add(itemStaticText20, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
+    wxStaticText* itemStaticText21 = new wxStaticText( itemPanel1, wxID_LblSimulation, _("Sim"), wxDefaultPosition, wxDefaultSize, 0 );
+    itemBoxSizer16->Add(itemStaticText21, 0, wxALIGN_CENTER_VERTICAL|wxALL, 5);
 
   // Connect events and objects
 
@@ -167,30 +171,70 @@ void PanelProviderControl::CreateControls( void ) {
 }
 
 void PanelProviderControl::OnClose( wxCloseEvent& event ) {
-  if ( 0 != OnPanelClosing ) OnPanelClosing();
   // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+  // event.CanVeto(); // if not a
   event.Skip();  // auto followed by Destroy();
 }
 
-void PanelProviderControl::UpdateProviderButtons( void ) {
-  m_btnIQFeed->Enable( m_cbIQFeedD1->IsChecked() || m_cbIQFeedD2->IsChecked() || m_cbIQFeedX->IsChecked() );
-  m_btnIB->Enable( m_cbIBD1->IsChecked() || m_cbIBD2->IsChecked() || m_cbIBX->IsChecked() );
-  m_btnSimulator->Enable( m_cbSimD1->IsChecked() || m_cbSimD2->IsChecked() || m_cbSimX->IsChecked() );
+void PanelProviderControl::SetProvider( Provider_t d1, Provider_t d2, Provider_t x ) {
+
+  wxCommandEvent event;  // dummy construct for the call
+
+  switch (d1) {
+    case EIQFeed:
+      OnBtnD1IQFeed( event );
+      break;
+    case EIB:
+      OnBtnD1IB( event );
+      break;
+    case ESim:
+      OnBtnD1Sim( event );
+      break;
+  }
+
+  switch (d2) {
+    case EIQFeed:
+      OnBtnD2IQFeed( event );
+      break;
+    case EIB:
+      OnBtnD2IB( event );
+      break;
+    case ESim:
+      OnBtnD2Sim( event );
+      break;
+  }
+
+  switch (x) {
+    case EIQFeed:
+      OnBtnXIQFeed( event );
+      break;
+    case EIB:
+      OnBtnXIB( event );
+      break;
+    case ESim:
+      OnBtnXSim( event );
+      break;
+  }
 }
 
-void PanelProviderControl::SyncInitialState( void ) {
-  if ( m_cbIQFeedD1->IsChecked() ) if ( 0 != OnProviderSelectD1 ) OnProviderSelectD1( EIQFeed );
-  if ( m_cbIQFeedD2->IsChecked() ) if ( 0 != OnProviderSelectD2 ) OnProviderSelectD2( EIQFeed );
-  if ( m_cbIQFeedX->IsChecked() ) if ( 0 != OnProviderSelectX ) OnProviderSelectX( EIQFeed );
+void PanelProviderControl::UpdateProviderButtons() {
+  m_btnIQFeed->Enable(    m_cbIQFeedD1->IsChecked() || m_cbIQFeedD2->IsChecked() || m_cbIQFeedX->IsChecked() );
+  m_btnIB->Enable(        m_cbIBD1->IsChecked()     || m_cbIBD2->IsChecked()     || m_cbIBX->IsChecked() );
+  m_btnSimulator->Enable( m_cbSimD1->IsChecked()    || m_cbSimD2->IsChecked()    || m_cbSimX->IsChecked() );
+}
 
-  if ( m_cbIBD1->IsChecked() ) if ( 0 != OnProviderSelectD1 ) OnProviderSelectD1( EIB );
-  if ( m_cbIBD2->IsChecked() ) if ( 0 != OnProviderSelectD2 ) OnProviderSelectD2( EIB );
-  if ( m_cbIBX->IsChecked() ) if ( 0 != OnProviderSelectX ) OnProviderSelectX( EIB );
+void PanelProviderControl::SyncInitialState() {
+  if ( m_cbIQFeedD1->IsChecked() ) if ( nullptr != OnProviderSelectD1 ) OnProviderSelectD1( EIQFeed );
+  if ( m_cbIQFeedD2->IsChecked() ) if ( nullptr != OnProviderSelectD2 ) OnProviderSelectD2( EIQFeed );
+  if ( m_cbIQFeedX->IsChecked() )  if ( nullptr != OnProviderSelectX  ) OnProviderSelectX( EIQFeed );
 
-  if ( m_cbSimD1->IsChecked() ) if ( 0 != OnProviderSelectD1 ) OnProviderSelectD1( ESim );
-  if ( m_cbSimD2->IsChecked() ) if ( 0 != OnProviderSelectD2 ) OnProviderSelectD2( ESim );
-  if ( m_cbSimX->IsChecked() ) if ( 0 != OnProviderSelectX ) OnProviderSelectX( ESim );
+  if ( m_cbIBD1->IsChecked() ) if ( nullptr != OnProviderSelectD1 ) OnProviderSelectD1( EIB );
+  if ( m_cbIBD2->IsChecked() ) if ( nullptr != OnProviderSelectD2 ) OnProviderSelectD2( EIB );
+  if ( m_cbIBX->IsChecked() )  if ( nullptr != OnProviderSelectX  ) OnProviderSelectX( EIB );
+
+  if ( m_cbSimD1->IsChecked() ) if ( nullptr != OnProviderSelectD1 ) OnProviderSelectD1( ESim );
+  if ( m_cbSimD2->IsChecked() ) if ( nullptr != OnProviderSelectD2 ) OnProviderSelectD2( ESim );
+  if ( m_cbSimX->IsChecked() )  if ( nullptr != OnProviderSelectX  ) OnProviderSelectX( ESim );
 
   UpdateProviderButtons();
 }
@@ -211,21 +255,21 @@ void PanelProviderControl::OnBtnCommon( wxCommandEvent& event, eProviderState_t&
 void PanelProviderControl::OnBtnIQFeed( wxCommandEvent& event ) {
   OnBtnCommon( event, m_stateIQFeed );
   SetIQFeedState( m_stateIQFeed );
-  if ( 0 != OnIQFeedStateChange ) 
+  if ( 0 != OnIQFeedStateChange )
     OnIQFeedStateChange( m_stateIQFeed );
 }
 
 void PanelProviderControl::OnBtnIB( wxCommandEvent& event ) {
   OnBtnCommon( event, m_stateIB );
   SetIBState( m_stateIB );
-  if ( 0 != OnIBStateChange ) 
+  if ( 0 != OnIBStateChange )
     OnIBStateChange( m_stateIB );
 }
 
 void PanelProviderControl::OnBtnSimulation( wxCommandEvent& event ) {
   OnBtnCommon( event, m_stateSimulator );
   SetSimulatorState( m_stateSimulator );
-  if ( 0 != OnSimulatorStateChange ) 
+  if ( 0 != OnSimulatorStateChange )
     OnSimulatorStateChange( m_stateSimulator );
 }
 
@@ -299,9 +343,9 @@ void PanelProviderControl::OnBtnD2IQFeed( wxCommandEvent& event ) {
 
 void PanelProviderControl::OnBtnXIQFeed( wxCommandEvent& event ) {
   ResetAllRadioExec();
-  //m_btnXIQFeed->SetValue( true );
+  m_cbIQFeedX->SetValue( true );
   UpdateProviderButtons();
-  //if ( 0 != OnProviderSelectX ) OnProviderSelectX( EIQFeed );
+  if ( 0 != OnProviderSelectX ) OnProviderSelectX( EIQFeed );
 }
 
 void PanelProviderControl::OnBtnD1IB( wxCommandEvent& event ) {
@@ -346,28 +390,28 @@ void PanelProviderControl::OnBtnXSim( wxCommandEvent& event ) {
   if ( 0 != OnProviderSelectX ) OnProviderSelectX( ESim );
 }
 
-void PanelProviderControl::ResetAllRadioData1( void ) {
+void PanelProviderControl::ResetAllRadioData1() {
   m_cbIQFeedD1->SetValue( false );
   m_cbIBD1->SetValue( false );
   m_cbSimD1->SetValue( false );
 }
 
-void PanelProviderControl::ResetAllRadioData2( void ) {
+void PanelProviderControl::ResetAllRadioData2() {
   m_cbIQFeedD2->SetValue( false );
   m_cbIBD2->SetValue( false );
   m_cbSimD2->SetValue( false );
 }
 
-void PanelProviderControl::ResetAllRadioExec( void ) {
+void PanelProviderControl::ResetAllRadioExec() {
   m_cbIQFeedX->SetValue( false );
   m_cbIBX->SetValue( false );
   m_cbSimX->SetValue( false );
 }
 
-void PanelProviderControl::EnableAllRadio( void ) {
+void PanelProviderControl::EnableAllRadio() {
   m_cbIQFeedD1->Enable();
   m_cbIQFeedD2->Enable();
-  //m_cbIQFeedX->Enable();  // IQFeed does not have execution ability
+  m_cbIQFeedX->Enable();  // IQFeed does not have execution ability
   m_cbIBD1->Enable();
   m_cbIBD2->Enable();
   m_cbIBX->Enable();
@@ -376,10 +420,10 @@ void PanelProviderControl::EnableAllRadio( void ) {
   m_cbSimX->Enable();
 }
 
-void PanelProviderControl::DisableAllRadio( void ) {
+void PanelProviderControl::DisableAllRadio() {
   m_cbIQFeedD1->Disable();
   m_cbIQFeedD2->Disable();
-//  m_cbIQFeedX->Disable();
+  m_cbIQFeedX->Disable();
   m_cbIBD1->Disable();
   m_cbIBD2->Disable();
   m_cbIBX->Disable();

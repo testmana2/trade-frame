@@ -38,29 +38,30 @@ namespace tf { // TradeFrame
 class PortfolioManager: public ou::db::ManagerBase<PortfolioManager> {
 public:
 
-  typedef Portfolio::pPortfolio_t pPortfolio_t;
-  typedef keytypes::idPortfolio_t idPortfolio_t;
-  typedef std::set<idPortfolio_t> setPortfolioId_t;
+  using pPortfolio_t = Portfolio::pPortfolio_t;
+  using idPortfolio_t = keytypes::idPortfolio_t;
+  using setPortfolioId_t = std::set<idPortfolio_t>;
 
-  typedef Portfolio::EPortfolioType EPortfolioType;
-  typedef Portfolio::currency_t currency_t;
+  using EPortfolioType = Portfolio::EPortfolioType;
+  using currency_t = Portfolio::currency_t;
 
-  typedef Position::pPosition_t pPosition_t;
-  typedef keytypes::idPosition_t idPosition_t;
-  typedef keytypes::idAccount_t idAccount_t;
-  typedef keytypes::idInstrument_t idInstrument_t;
+  using pPosition_t = Position::pPosition_t;
+  using idPosition_t = keytypes::idPosition_t;
+  using idAccount_t = keytypes::idAccount_t;
+  using idInstrument_t = keytypes::idInstrument_t;
 
-  typedef keytypes::idAccountOwner_t idAccountOwner_t;
+  using idAccountOwner_t = keytypes::idAccountOwner_t;
 
-  typedef Instrument::pInstrument_cref pInstrument_cref;
-  typedef Position::pProvider_t pProvider_t;
+  using pWatch_t = Position::pWatch_t;
+  using pInstrument_t = Instrument::pInstrument_t;
+  using pProvider_t = Position::pProvider_t;
 
-  typedef std::pair<const Position&, const Execution&> execution_pair_t;
-  typedef const execution_pair_t& execution_delegate_t;
+  using execution_pair_t = std::pair<const Position&, const Execution&>;
+  using execution_delegate_t = const execution_pair_t&;
 
-  typedef std::pair<std::string, pPosition_t> mapPosition_pair_t;
-  typedef std::map<std::string, pPosition_t> mapPosition_t;
-  typedef mapPosition_t::iterator mapPosition_iter_t;
+  using mapPosition_pair_t = std::pair<std::string, pPosition_t>;
+  using mapPosition_t = std::map<std::string, pPosition_t>;
+  using mapPosition_iter_t = mapPosition_t::iterator;
 
   struct structPortfolio {
     pPortfolio_t pPortfolio;
@@ -68,43 +69,51 @@ public:
     structPortfolio( pPortfolio_t& pPortfolio_ ) : pPortfolio( pPortfolio_ ) {};
   };
 
-  PortfolioManager(void) {};
-  ~PortfolioManager(void) {};
+  PortfolioManager() {};
+  ~PortfolioManager() {};
 
   bool PortfolioExists( const idPortfolio_t& idPortfolio );
+  bool PositionExists( const idPortfolio_t& idPortfolio, const std::string& sNamePosition );
 
-  pPortfolio_t ConstructPortfolio( 
-    const idPortfolio_t& idPortfolio, const idAccountOwner_t& idAccountOwner, const idPortfolio_t& idOwner, 
+  pPortfolio_t ConstructPortfolio(
+    const idPortfolio_t& idPortfolio, const idAccountOwner_t& idAccountOwner, const idPortfolio_t& idOwner,
     EPortfolioType ePortfolioType, currency_t eCurrency, const std::string& sDescription = "" );
   pPortfolio_t GetPortfolio( const idPortfolio_t& idPortfolio );
   void UpdatePortfolio( const idPortfolio_t& idPortfolio );
   void DeletePortfolio( const idPortfolio_t& idPortfolio );
 
-  pPosition_t ConstructPosition( 
-    const idPortfolio_t& idPortfolio, const std::string& sName, const std::string& sAlgorithm,
-    const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount, 
+  pPosition_t ConstructPosition( // old mechanism
+    const idPortfolio_t& idPortfolio, const std::string& sNamePosition, const std::string& sAlgorithm,
+    const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount,
     const pProvider_t& pExecutionProvider, const pProvider_t& pDataProvider,
-    pInstrument_cref pInstrument
+    pInstrument_t pInstrument
     );
 
-  pPosition_t GetPosition( const idPortfolio_t& idPortfolio, const std::string& sName );
-  void UpdatePosition( const idPortfolio_t& idPortfolio, const std::string& sName );
-  void DeletePosition( const idPortfolio_t& idPortfolio, const std::string& sName );
+  pPosition_t ConstructPosition(
+    const idPortfolio_t& idPortfolio, const std::string& sNamePosition,
+    const std::string& sAlgorithm,
+    const idAccount_t& idExecutionAccount, const idAccount_t& idDataAccount,
+    const pProvider_t& pExecutionProvider,
+    pWatch_t pWatch
+    );
 
-  typedef FastDelegate1<pPosition_t&> OnPositionNeedsDetailsHandler;
+  pPosition_t ConstructPosition( // new mechanism
+    const idPortfolio_t& idPortfolio, const std::string& sNamePosition,
+    const std::string& sAlgorithm,
+    const pProvider_t& pExecutionProvider, pWatch_t pWatch
+    );
+
+  pPosition_t GetPosition( const idPortfolio_t& idPortfolio, const std::string& sNamePosition );
+  void UpdatePosition( const idPortfolio_t& idPortfolio, const std::string& sNamePosition ); // TODO: may not be funcfional
+  void DeletePosition( const idPortfolio_t& idPortfolio, const std::string& sNamePosition );
+
+  using OnPositionNeedsDetailsHandler = FastDelegate1<pPosition_t&>;
   void SetOnPositionNeedDetails( OnPositionNeedsDetailsHandler function ) {
     OnPositionNeedsDetails = function;
   }
 
-//  ou::Delegate<const idPortfolio_t&> OnPortfolioLoaded;
-//  ou::Delegate<const idPortfolio_t&> OnPortfolioAdded;
-//  ou::Delegate<const idPortfolio_t&> OnPortfolioUpdated;
-//  ou::Delegate<const idPortfolio_t&> OnPortfolioDeleted;
-
-//  ou::Delegate<const idPosition_t&> OnPositionLoaded;
-//  ou::Delegate<const idPosition_t&> OnPositionAdded;
-//  ou::Delegate<const idPosition_t&> OnPositionUpdated;
-//  ou::Delegate<const idPosition_t&> OnPositionDeleted;
+  void PortfolioUpdateActive( pPortfolio_t );
+  void PositionUpdateNotes( pPosition_t );
 
   ou::Delegate<pPortfolio_t&> OnPortfolioLoaded;
   ou::Delegate<pPortfolio_t&> OnPortfolioAdded;
@@ -122,7 +131,7 @@ public:
   template<class F> void ScanPositions( mapPosition_t&, F );
   template<class F> void ScanPositions( const idPortfolio_t&, F );
 
-  void LoadActivePortfolios( void );
+  void LoadActivePortfolios();
 
   void AttachToSession( ou::db::Session* pSession );
   void DetachFromSession( ou::db::Session* pSession );
@@ -131,22 +140,29 @@ protected:
 
 private:
 
-  typedef std::pair<idPortfolio_t, structPortfolio> mapPortfolio_pair_t;
-  typedef std::map<idPortfolio_t, structPortfolio> mapPortfolios_t;
-  typedef mapPortfolios_t::iterator mapPortfolios_iter_t;
+  using mapPortfolio_pair_t = std::pair<idPortfolio_t, structPortfolio>;
+  using mapPortfolios_t = std::map<idPortfolio_t, structPortfolio>;
+  using mapPortfolios_iter_t = mapPortfolios_t::iterator;
 
   mapPortfolios_t m_mapPortfolios;
 
   // method for getting at child portfolios
   // portfolio id "" is root where all top level portfolios are linked
-  typedef std::map<idPortfolio_t,setPortfolioId_t> mapReportingPortfolios_t;
-  typedef std::pair<idPortfolio_t,setPortfolioId_t> mapReportingPortfolios_pair_t;
+  using mapReportingPortfolios_t = std::map<idPortfolio_t,setPortfolioId_t>;
+  using mapReportingPortfolios_pair_t = std::pair<idPortfolio_t,setPortfolioId_t>;
   mapReportingPortfolios_t m_mapReportingPortfolios;
-  typedef mapReportingPortfolios_t::iterator iterReportingPortfolios_t;
+  using iterReportingPortfolios_t = mapReportingPortfolios_t::iterator;
 
   void UpdateReportingPortfolio( idPortfolio_t idOwner, idPortfolio_t idReporting );
 
   OnPositionNeedsDetailsHandler OnPositionNeedsDetails;
+
+  using fConstructPosition_t = std::function<pPosition_t()>;
+
+  void ConstructPosition( // re-factored code
+    const idPortfolio_t& idPortfolio, const std::string& sNamePosition,
+    fConstructPosition_t&&
+  );
 
   void PortfolioCommon( pPortfolio_t& );
 

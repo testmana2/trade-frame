@@ -18,15 +18,15 @@
 
 #include <TFTrading/ProviderManager.h>
 
+#include <TFIQFeed/Provider.h>
 #include <TFInteractiveBrokers/IBTWS.h>
-#include <TFIQFeed/IQFeedProvider.h>
-#include <TFSimulation/SimulationProvider.h>
+#include <TFSimulation/SimulationProvider.hpp>
 
 #include <TFVuTrading/PanelProviderControl.h>
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
-  
+
 template<typename CRTP>
 class FrameWork01 {
 public:
@@ -37,20 +37,20 @@ public:
     EModeLive
   } m_eMode;
 
-  FrameWork01(void);
-  ~FrameWork01(void);
+  FrameWork01();
+  virtual ~FrameWork01();
 
-  Mode_t Mode( void ) const { return m_mode; };
+  Mode_t Mode() const { return m_mode; };
 
 protected:
 
-  typedef ou::tf::ProviderManager ProviderManager;
-  typedef ou::tf::ProviderInterfaceBase::pProvider_t pProvider_t;
-  typedef ou::tf::eProviderState_t eProviderState_t;
+  using ProviderManager = ou::tf::ProviderManager;
+  using pProvider_t = ou::tf::ProviderInterfaceBase::pProvider_t;
+  using eProviderState_t = ou::tf::eProviderState_t;
 
-  typedef ou::tf::IBTWS::pProvider_t pProviderIBTWS_t;
-  typedef ou::tf::IQFeedProvider::pProvider_t pProviderIQFeed_t;
-  typedef ou::tf::SimulationProvider::pProvider_t pProviderSim_t;
+  using pProviderIBTWS_t = ou::tf::ib::TWS::pProvider_t;
+  using pProviderIQFeed_t = ou::tf::iqfeed::Provider::pProvider_t;
+  using pProviderSim_t = ou::tf::SimulationProvider::pProvider_t;
 
   std::string m_sTSDataStreamStarted;
 
@@ -78,11 +78,11 @@ protected:
   void      OnIQFeedConnecting( int ) {};
   void          OnIBConnecting( int ) {};
   void   OnSimulatorConnecting( int ) {};
-  
+
   void       OnIQFeedConnected( int ) {};
-  void           OnIBConnected( int ) {}; 
+  void           OnIBConnected( int ) {};
   void    OnSimulatorConnected( int ) {};
-  
+
   void    OnIQFeedDisconnecting( int ) {};
   void        OnIBDisconnecting( int ) {};
   void OnSimulatorDisconnecting( int ) {};
@@ -105,31 +105,31 @@ protected:
   void OnData2Disconnected( int ) {};
   void  OnExecDisconnected( int ) {};
 
-  void LinkToPanelProviderControl( void );
-  void DelinkFromPanelProviderControl( void );
+  void LinkToPanelProviderControl();
+  void DelinkFromPanelProviderControl();
 
 private:
 
-  void SetMode( void );
+  void SetMode();
 
   void HandleStateChangeRequest( ou::tf::eProviderState_t, bool bConnected, pProvider_t );
 
   void HandleProviderStateChangeIQFeed( ou::tf::eProviderState_t );
   void HandleProviderStateChangeIB( ou::tf::eProviderState_t );
-  void HandleProviderStateChangeSimulation( ou::tf::eProviderState_t ); 
+  void HandleProviderStateChangeSimulation( ou::tf::eProviderState_t );
 
   void HandleIBConnecting( int );
   void HandleIBConnected( int );
   void HandleIBDisconnecting( int );
   void HandleIBDisconnected( int );
   void HandleIBError( size_t );
-  
+
   void HandleIQFeedConnecting( int );
   void HandleIQFeedConnected( int );
   void HandleIQFeedDisconnecting( int );
   void HandleIQFeedDisconnected( int );
   void HandleIQFeedError( size_t );
-  
+
   void HandleSimulatorConnecting( int );
   void HandleSimulatorConnected( int );
   void HandleSimulatorDisconnecting( int );
@@ -147,7 +147,7 @@ private:
   void HandleOnData2Disconnected( int );
 
   void HandleOnExecConnecting( int );  // need to test for connection failure, when ib is not running
-  void HandleOnExecConnected( int ); 
+  void HandleOnExecConnected( int );
   void HandleOnExecDisconnecting( int );
   void HandleOnExecDisconnected( int );
 
@@ -155,16 +155,16 @@ private:
   void HandleProviderSelectD2( ou::tf::PanelProviderControl::Provider_t );
   void HandleProviderSelectX( ou::tf::PanelProviderControl::Provider_t );
 
-  void HandlePanelClosing( void );
+  void HandlePanelClosing();
 
 };
 
 template<typename CRTP>
-FrameWork01<CRTP>::FrameWork01( void ) :
+FrameWork01<CRTP>::FrameWork01() :
   m_mode( EModeUnknown ),
-  m_pPanelProviderControl( 0 ),
-  m_tws( new ou::tf::IBTWS( "U000000" ) ), m_bIBConnected( false ), 
-  m_iqfeed( new ou::tf::IQFeedProvider() ), m_bIQFeedConnected( false ),
+  m_pPanelProviderControl( nullptr ),
+  m_tws( new ou::tf::ib::TWS( "U000000" ) ), m_bIBConnected( false ),
+  m_iqfeed( new ou::tf::iqfeed::Provider() ), m_bIQFeedConnected( false ),
   m_sim( new ou::tf::SimulationProvider() ), m_bSimConnected( false ),
   m_bData1Connected( false ), m_bData2Connected( false ), m_bExecConnected( false )
 
@@ -180,39 +180,29 @@ FrameWork01<CRTP>::FrameWork01( void ) :
   // http://www.boost.org/doc/libs/1_54_0/doc/html/date_time/date_time_io.html
   boost::posix_time::time_facet* pFacet( new boost::posix_time::time_facet( "%Y-%m-%d %H:%M:%S%F" ) );
   ss.imbue( std::locale( ss.getloc(), pFacet ) );
-  ss << ou::TimeSource::Instance().External();
+  ss << ou::TimeSource::GlobalInstance().External();
   m_sTSDataStreamStarted = ss.str();
 
   // this is where we select which provider we will be working with on this run
   // providers need to be registered in order for portfolio/position loading to function properly
   // key needs to match to account
   // ensure providers have been initialized above first
-  pProvider_t p;
-  
-  p = m_iqfeed;
-  //p = boost::static_pointer_cast<pProvider_t>( m_iqfeed );
-  ProviderManager::LocalCommonInstance().Register(  "iq01", p );
-  
-  p = m_tws;
-  //p = boost::static_pointer_cast<pProvider_t>( m_tws );
-  ProviderManager::LocalCommonInstance().Register(  "ib01", p );
-  
-  p = m_sim;
-  //p = boost::static_pointer_cast<pProvider_t>( m_sim );
-  ProviderManager::LocalCommonInstance().Register( "sim01", p );
 
+  ProviderManager::LocalCommonInstance().Register(  "iq01", m_iqfeed );
   m_iqfeed->OnConnecting.Add( MakeDelegate( this, &FrameWork01::HandleIQFeedConnecting ) );
   m_iqfeed->OnConnected.Add( MakeDelegate( this, &FrameWork01::HandleIQFeedConnected ) );
   m_iqfeed->OnDisconnecting.Add( MakeDelegate( this, &FrameWork01::HandleIQFeedDisconnecting ) );
   m_iqfeed->OnDisconnected.Add( MakeDelegate( this, &FrameWork01::HandleIQFeedDisconnected ) );
   m_iqfeed->OnError.Add( MakeDelegate( this, &FrameWork01::HandleIQFeedError ) );
 
+  ProviderManager::LocalCommonInstance().Register(  "ib01", m_tws );
   m_tws->OnConnecting.Add( MakeDelegate( this, &FrameWork01::HandleIBConnecting ) );
   m_tws->OnConnected.Add( MakeDelegate( this, &FrameWork01::HandleIBConnected ) );
   m_tws->OnDisconnecting.Add( MakeDelegate( this, &FrameWork01::HandleIBDisconnecting ) );
   m_tws->OnDisconnected.Add( MakeDelegate( this, &FrameWork01::HandleIBDisconnected ) );
   m_tws->OnError.Add( MakeDelegate( this, &FrameWork01::HandleIBError ) );
 
+  ProviderManager::LocalCommonInstance().Register( "sim01", m_sim );
   m_sim->OnConnecting.Add( MakeDelegate( this, &FrameWork01::HandleSimulatorConnecting ) );
   m_sim->OnConnected.Add( MakeDelegate( this, &FrameWork01::HandleSimulatorConnected ) );
   m_sim->OnDisconnecting.Add( MakeDelegate( this, &FrameWork01::HandleSimulatorDisconnecting ) );
@@ -221,34 +211,33 @@ FrameWork01<CRTP>::FrameWork01( void ) :
 }
 
 template<typename CRTP>
-FrameWork01<CRTP>::~FrameWork01( void ) {
+FrameWork01<CRTP>::~FrameWork01() {
 
   m_iqfeed->OnConnecting.Remove( MakeDelegate( this, &FrameWork01::HandleIQFeedConnecting ) );
   m_iqfeed->OnConnected.Remove( MakeDelegate( this, &FrameWork01::HandleIQFeedConnected ) );
   m_iqfeed->OnDisconnecting.Remove( MakeDelegate( this, &FrameWork01::HandleIQFeedDisconnecting ) );
   m_iqfeed->OnDisconnected.Remove( MakeDelegate( this, &FrameWork01::HandleIQFeedDisconnected ) );
   m_iqfeed->OnError.Remove( MakeDelegate( this, &FrameWork01::HandleIQFeedError ) );
+  ou::tf::ProviderManager::LocalCommonInstance().Release( "iq01" );
 
   m_tws->OnConnecting.Remove( MakeDelegate( this, &FrameWork01::HandleIBConnecting ) );
   m_tws->OnConnected.Remove( MakeDelegate( this, &FrameWork01::HandleIBConnected ) );
   m_tws->OnDisconnecting.Remove( MakeDelegate( this, &FrameWork01::HandleIBDisconnecting ) );
   m_tws->OnDisconnected.Remove( MakeDelegate( this, &FrameWork01::HandleIBDisconnected ) );
   m_tws->OnError.Remove( MakeDelegate( this, &FrameWork01::HandleIBError ) );
+  ou::tf::ProviderManager::LocalCommonInstance().Release( "ib01" );
 
   m_sim->OnConnecting.Remove( MakeDelegate( this, &FrameWork01::HandleSimulatorConnecting ) );
   m_sim->OnConnected.Remove( MakeDelegate( this, &FrameWork01::HandleSimulatorConnected ) );
   m_sim->OnDisconnecting.Remove( MakeDelegate( this, &FrameWork01::HandleSimulatorDisconnecting ) );
   m_sim->OnDisconnected.Remove( MakeDelegate( this, &FrameWork01::HandleSimulatorDisconnected ) );
   m_sim->OnError.Remove( MakeDelegate( this, &FrameWork01::HandleSimulatorError ) );
-
-  ou::tf::ProviderManager::LocalCommonInstance().Release( "iq01" );
-  ou::tf::ProviderManager::LocalCommonInstance().Release( "ib01" );
   ou::tf::ProviderManager::LocalCommonInstance().Release( "sim01" );
 
 }
 
 template<typename CRTP>
-void FrameWork01<CRTP>::LinkToPanelProviderControl( void ) {
+void FrameWork01<CRTP>::LinkToPanelProviderControl() {
   m_pPanelProviderControl->SetOnIQFeedStateChangeHandler( MakeDelegate( this, &FrameWork01<CRTP>::HandleProviderStateChangeIQFeed ) );
   m_pPanelProviderControl->SetOnIBStateChangeHandler( MakeDelegate( this, &FrameWork01<CRTP>::HandleProviderStateChangeIB ) );
   m_pPanelProviderControl->SetOnSimulatorStateChangeHandler( MakeDelegate( this, &FrameWork01<CRTP>::HandleProviderStateChangeSimulation ) );
@@ -261,8 +250,8 @@ void FrameWork01<CRTP>::LinkToPanelProviderControl( void ) {
 }
 
 template<typename CRTP>
-void FrameWork01<CRTP>::DelinkFromPanelProviderControl( void ) {
-  if ( 0 != m_pPanelProviderControl ) {
+void FrameWork01<CRTP>::DelinkFromPanelProviderControl() {
+  if ( nullptr != m_pPanelProviderControl ) {
     m_pPanelProviderControl->SetOnProviderSelectD1Handler( 0 );
     m_pPanelProviderControl->SetOnProviderSelectD2Handler( 0 );
     m_pPanelProviderControl->SetOnProviderSelectXHandler( 0 );
@@ -288,7 +277,7 @@ void FrameWork01<CRTP>::HandleProviderStateChangeSimulation( ou::tf::eProviderSt
   HandleStateChangeRequest( state, m_bSimConnected, m_sim );
 }
 
-template<typename CRTP> // 2017.12.22 is this actually useful for anything?
+template<typename CRTP>
 void FrameWork01<CRTP>::HandleStateChangeRequest( eProviderState_t state, bool bConnected, pProvider_t p ) {
   switch ( state ) {
   case eProviderState_t::ProviderGoingOn:
@@ -318,21 +307,21 @@ void FrameWork01<CRTP>::HandleStateChangeRequest( eProviderState_t state, bool b
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIQFeedConnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIQFeed, eProviderState_t::ProviderGoingOn ) );
   static_cast<CRTP*>(this)->OnIQFeedConnecting( e );
 }
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIBConnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIB, eProviderState_t::ProviderGoingOn ) );
   static_cast<CRTP*>(this)->OnIBConnecting( e );
 }
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleSimulatorConnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderSimulator, eProviderState_t::ProviderGoingOn ) );
   static_cast<CRTP*>(this)->OnSimulatorConnecting( e );
 }
@@ -340,7 +329,7 @@ void FrameWork01<CRTP>::HandleSimulatorConnecting( int e ) {  // cross thread ev
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIQFeedConnected( int e ) {  // cross thread event
   m_bIQFeedConnected = true;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIQFeed, eProviderState_t::ProviderOn ) );
   static_cast<CRTP*>(this)->OnIQFeedConnected( e );
 }
@@ -348,7 +337,7 @@ void FrameWork01<CRTP>::HandleIQFeedConnected( int e ) {  // cross thread event
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIBConnected( int e ) { // cross thread event
   m_bIBConnected = true;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIB, eProviderState_t::ProviderOn ) );
   static_cast<CRTP*>(this)->OnIBConnected( e );
 }
@@ -356,28 +345,28 @@ void FrameWork01<CRTP>::HandleIBConnected( int e ) { // cross thread event
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleSimulatorConnected( int e ) { // cross thread event
   m_bSimConnected = true;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderSimulator, eProviderState_t::ProviderOn ) );
   static_cast<CRTP*>(this)->OnSimulatorConnected( e );
 }
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIQFeedDisconnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIQFeed, eProviderState_t::ProviderGoingOff ) );
   static_cast<CRTP*>(this)->OnIQFeedDisconnecting( e );
 }
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIBDisconnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIB, eProviderState_t::ProviderGoingOff ) );
   static_cast<CRTP*>(this)->OnIBDisconnecting( e );
 }
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleSimulatorDisconnecting( int e ) {  // cross thread event
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderSimulator, eProviderState_t::ProviderGoingOff ) );
   static_cast<CRTP*>(this)->OnSimulatorDisconnecting( e );
 }
@@ -385,7 +374,7 @@ void FrameWork01<CRTP>::HandleSimulatorDisconnecting( int e ) {  // cross thread
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIQFeedDisconnected( int e ) { // cross thread event
   m_bIQFeedConnected = false;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIQFeed, eProviderState_t::ProviderOff ) );
   static_cast<CRTP*>(this)->OnIQFeedDisconnected( e );
 }
@@ -393,7 +382,7 @@ void FrameWork01<CRTP>::HandleIQFeedDisconnected( int e ) { // cross thread even
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleIBDisconnected( int e ) {  // cross thread event
   m_bIBConnected = false;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderIB, eProviderState_t::ProviderOff ) );
   static_cast<CRTP*>(this)->OnIBDisconnected( e );
 }
@@ -401,7 +390,7 @@ void FrameWork01<CRTP>::HandleIBDisconnected( int e ) {  // cross thread event
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleSimulatorDisconnected( int e ) {  // cross thread event
   m_bSimConnected = false;
-  if ( 0 != m_pPanelProviderControl )
+  if ( nullptr != m_pPanelProviderControl )
     m_pPanelProviderControl->QueueEvent( new UpdateProviderStatusEvent( EVT_ProviderSimulator, eProviderState_t::ProviderOff ) );
   static_cast<CRTP*>(this)->OnSimulatorDisconnected( e );
 }
@@ -467,7 +456,7 @@ void FrameWork01<CRTP>::HandleOnData2Disconnected(int e) {
 
 template<typename CRTP>
 void FrameWork01<CRTP>::HandleOnExecConnecting( int e ) {  // cross thread event
-  static_cast<CRTP*>(this)->OnData1Connecting( e );
+  static_cast<CRTP*>(this)->OnExecConnecting( e );
 }
 
 template<typename CRTP>
@@ -547,9 +536,11 @@ void FrameWork01<CRTP>::HandleProviderSelectX( ou::tf::PanelProviderControl::Pro
     m_pExecutionProvider->OnDisconnecting.Remove( MakeDelegate( this, &FrameWork01<CRTP>::HandleOnExecDisconnecting ) );
     m_pExecutionProvider->OnDisconnected.Remove( MakeDelegate( this, &FrameWork01<CRTP>::HandleOnExecDisconnected ) );
   }
+  m_iqfeed->EnableExecution( false );
   switch ( provider ) {
   case ou::tf::PanelProviderControl::Provider_t::EIQFeed:
     m_pExecutionProvider = m_iqfeed;
+    m_iqfeed->EnableExecution( true );
     break;
   case ou::tf::PanelProviderControl::Provider_t::EIB:
     m_pExecutionProvider = m_tws;
@@ -566,13 +557,13 @@ void FrameWork01<CRTP>::HandleProviderSelectX( ou::tf::PanelProviderControl::Pro
 }
 
 template<typename CRTP>
-void FrameWork01<CRTP>::SetMode( void ) {
+void FrameWork01<CRTP>::SetMode() {
   m_mode = EModeUnknown;
   if ( ( 0 != m_pData1Provider.use_count() ) && ( 0 != m_pExecutionProvider.use_count() ) ) {
     if ( ( ou::tf::keytypes::EProviderSimulator == m_pData1Provider->ID() ) && ( ou::tf::keytypes::EProviderSimulator == m_pExecutionProvider->ID() ) ) {
       m_mode = EModeSimulation;
     }
-    if ( 
+    if (
       ( ( ou::tf::keytypes::EProviderIQF == m_pData1Provider->ID() ) || ( ou::tf::keytypes::EProviderIB == m_pData1Provider->ID() ) )
       && ( ou::tf::keytypes::EProviderIB == m_pExecutionProvider->ID() ) )
     {
@@ -582,7 +573,7 @@ void FrameWork01<CRTP>::SetMode( void ) {
 }
 
 template<typename CRTP>
-void FrameWork01<CRTP>::HandlePanelClosing( void ) {
+void FrameWork01<CRTP>::HandlePanelClosing() {
   DelinkFromPanelProviderControl();
 }
 

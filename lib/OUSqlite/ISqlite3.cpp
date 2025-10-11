@@ -23,8 +23,8 @@
 namespace ou {
 namespace db {
 
-ISqlite3::ISqlite3(void) 
-  : m_db( 0 )
+ISqlite3::ISqlite3(void)
+  : m_db( nullptr )
 {
 }
 
@@ -33,34 +33,36 @@ ISqlite3::~ISqlite3(void) {
 
 void ISqlite3::SessionOpen( const std::string& sDbFileName, enumOpenFlags flags ) {
 
-  int sqlite3_flags = SQLITE_OPEN_READWRITE;
+  //https://sqlite.org/threadsafe.html, https://sqlite.org/c3ref/open.html
+  int sqlite3_flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_FULLMUTEX;
   sqlite3_flags |= ( 0 < ( flags & EOpenFlagsAutoCreate ) ) ? SQLITE_OPEN_CREATE : 0;
 
   int rtn = sqlite3_open_v2( sDbFileName.c_str(), &m_db, sqlite3_flags, 0 );
   if ( SQLITE_OK != rtn ) {
-    m_db = 0;
+    m_db = nullptr;
     throw std::runtime_error( "Db open error" );
   }
 
 }
 
 void ISqlite3::SessionClose( void ) {
-  int rtn = sqlite3_close( m_db );
-  m_db = 0;
-  if (  SQLITE_OK != rtn ) {
-    if ( SQLITE_BUSY == rtn ) {
-      std::cout << "sqlite busy" << std::endl;  // prepared statements need to be closed
+  if ( nullptr != m_db ) {
+    int rtn = sqlite3_close( m_db );
+    m_db = nullptr;
+    if (  SQLITE_OK != rtn ) {
+      if ( SQLITE_BUSY == rtn ) {
+        std::cout << "sqlite busy" << std::endl;  // prepared statements need to be closed
+      }
+      else {
+        assert( false );
+      }
     }
-    else {
-      assert( false );
-    }
-    
   }
 }
 
 void ISqlite3::PrepareStatement( structStatementState& statement, std::string& sStatement ) {
   sStatement += ";";
-  int rtn = sqlite3_prepare_v2( 
+  int rtn = sqlite3_prepare_v2(
     m_db, sStatement.c_str(), -1, &statement.pStmt, NULL );
   if ( SQLITE_OK != rtn ) {
     std::string sErr( "ISqlite3::PrepareStatement: " );
@@ -69,12 +71,12 @@ void ISqlite3::PrepareStatement( structStatementState& statement, std::string& s
     sErr += ")";
     throw std::runtime_error( sErr );
   }
-  assert( 0 != statement.pStmt );
+  assert( nullptr != statement.pStmt );
 }
 
 bool ISqlite3::ExecuteStatement( structStatementState& statement ) {
   bool bRow = false;  // false, no rows, true, one or more rows
-  if ( 0 != statement.pStmt ) {
+  if ( nullptr != statement.pStmt ) {
     statement.bIsReset = false;
     int rtn = sqlite3_step( statement.pStmt );
     switch ( rtn ) {
@@ -108,6 +110,11 @@ bool ISqlite3::ExecuteStatement( structStatementState& statement ) {
       throw std::runtime_error( sErr );
       }
       break;
+    case SQLITE_CONSTRAINT: {
+      std::string sErr( "ISqlite3::ExecuteStatement: " );
+      sErr += " constraint, record probably exists";
+      throw std::runtime_error( sErr );
+      }
     default: {
       std::string sErr( "ISqlite3::ExecuteStatement: " );
       sErr += " unknown error in execute(";
@@ -121,7 +128,7 @@ bool ISqlite3::ExecuteStatement( structStatementState& statement ) {
 }
 
 void ISqlite3::ResetStatement( structStatementState& statement ) {
-  if ( 0 != statement.pStmt ) {
+  if ( nullptr != statement.pStmt ) {
     int rtn = sqlite3_reset( statement.pStmt );
     if ( SQLITE_OK != rtn ) {
       std::string sErr( "ISqlite3::ResetStatement: " );
@@ -135,7 +142,7 @@ void ISqlite3::ResetStatement( structStatementState& statement ) {
 }
 
 void ISqlite3::CloseStatement( structStatementState& statement ) {
-  if ( 0 != statement.pStmt ) { // it shouldn't be zero, but test anyway
+  if ( nullptr != statement.pStmt ) { // it shouldn't be zero, but test anyway
     int rtn = sqlite3_finalize( statement.pStmt );
     if ( SQLITE_OK != rtn ) {
       std::string sErr( "ISqlite3::CloseStatement: " );
@@ -144,7 +151,7 @@ void ISqlite3::CloseStatement( structStatementState& statement ) {
       sErr += ")";
       throw std::runtime_error( sErr );
     }
-    statement.pStmt = 0;
+    statement.pStmt = nullptr;
     // todo:  should the list element also be deleted here?
   }
 }

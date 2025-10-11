@@ -11,46 +11,24 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-//#include "StdAfx.h"
-
 #include "ChartEntryIndicator.h"
 
 namespace ou { // One Unified
 
-ChartEntryIndicator::ChartEntryIndicator(void) 
-: ChartEntryBaseWithTime() 
-{
-}
+ChartEntryIndicator::ChartEntryIndicator()
+: ChartEntryPrice()
+{}
 
-ChartEntryIndicator::ChartEntryIndicator( size_type nSize ) 
-: ChartEntryBaseWithTime( nSize )
-{
-}
+ChartEntryIndicator::ChartEntryIndicator( ChartEntryIndicator&& rhs )
+: ChartEntryPrice( std::move( rhs ) )
+{}
 
-ChartEntryIndicator::~ChartEntryIndicator(void) {
-}
+//ChartEntryIndicator::ChartEntryIndicator( size_type nSize )
+//: ChartEntryBaseWithTime( nSize )
+//{
+//}
 
-void ChartEntryIndicator::Reserve( size_type nSize ) {
-  ChartEntryBaseWithTime::Reserve( nSize );
-}
-
-bool ChartEntryIndicator::AddEntryToChart(XYChart *pXY, structChartAttributes *pAttributes)  {
-  bool bAdded( false );
-  ChartEntryBaseWithTime::ClearQueue();
-  if ( 0 != this->m_vDateTime.size() ) {
-    DoubleArray daXData = ChartEntryBaseWithTime::GetDateTimes();
-    if ( 0 != daXData.len ) {
-      LineLayer *ll = pXY->addLineLayer( this->GetPrices() );
-      ll->setXData( daXData );
-      pAttributes->dblXMin = daXData[0];
-      pAttributes->dblXMax = daXData[ daXData.len - 1 ];
-      DataSet *pds = ll->getDataSet(0);
-      pds->setDataColor( m_eColour );
-      pds->setDataName( GetName().c_str() );
-      bAdded = true;
-    }
-  }
-  return bAdded;
+ChartEntryIndicator::~ChartEntryIndicator() {
 }
 
 } // namespace ou

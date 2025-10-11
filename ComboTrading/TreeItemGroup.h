@@ -16,6 +16,8 @@
 
 #pragma once
 
+#include <TFTrading/TradingEnumerations.h>
+
 #include "TreeItem.h"
 #include "TreeItemInstrument.h"
 
@@ -24,52 +26,52 @@ class TreeItemGroup;
 class TreeItemGroupCommon: public TreeItemResources {
   friend class boost::serialization::access;
 public:
-  
-  TreeItemGroupCommon( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ): 
+
+  TreeItemGroupCommon( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ):
     TreeItemResources( id, baseResources, resources ) {}
   virtual ~TreeItemGroupCommon( void ) {}
-  
+
 protected:
-  
+
   enum IdTreeItemType {
     IdGroup = 201, IdInstrument, IdPortfolio, IdPosition
   };
-  
+
   enum {
     ID_Null = wxID_HIGHEST,
-    MIAddGroup, MIAddInstrument, MIAddPortfolio, MIAddPosition, 
+    MIAddGroup, MIAddInstrument, MIAddPortfolio, MIAddPosition,
     MIRename, MIDelete
   };
-  
+
   void BuildContextMenu( wxMenu* pMenu );
-  
+
 private:
   void HandleAddInstrument( wxCommandEvent& event );
   void HandleAddPortfolio( wxCommandEvent& event );
   void HandleAddPosition( wxCommandEvent& event );
   void HandleAddGroup( wxCommandEvent& event );
   void HandleRename( wxCommandEvent& event );
-  
+
   template<typename Archive>
   void save( Archive& ar, const unsigned int version ) const {
     ar << boost::serialization::base_object<const TreeItemResources>(*this);
-    const vMembers_t::size_type n = m_vMembers.size();
+    const mapMembers_t::size_type n = m_mapMembers.size();
     ar << n;
-    for ( vMembers_t::const_iterator iter = m_vMembers.begin(); iter != m_vMembers.end(); ++iter ) {
-      ar << ( iter->m_type );
-      switch ( iter->m_type ) {
+    for ( mapMembers_t::const_iterator iter = m_mapMembers.begin(); iter != m_mapMembers.end(); ++iter ) {
+      ar << ( iter->second.m_type );
+      switch ( iter->second.m_type ) {
         case IdGroup:
         {
-          const TreeItemGroup* p = dynamic_cast<TreeItemGroup*>( iter->m_pTreeItemBase.get() );
+          const TreeItemGroup* p = dynamic_cast<TreeItemGroup*>( iter->second.m_pTreeItemBase.get() );
           ar & *p;
         }
         break;
-	case IdInstrument:
-	{
-	  const TreeItemInstrument* p = dynamic_cast<TreeItemInstrument*>( iter->m_pTreeItemBase.get() );
-          ar & *p;
-	}
-	break;
+        case IdInstrument:
+        {
+          const TreeItemInstrument* p = dynamic_cast<TreeItemInstrument*>( iter->second.m_pTreeItemBase.get() );
+                ar & *p;
+        }
+        break;
       }
     }
   }
@@ -77,9 +79,9 @@ private:
   template<typename Archive>
   void load( Archive& ar, const unsigned int version ) {
     ar & boost::serialization::base_object<TreeItemResources>(*this);
-    vMembers_t::size_type n;
+    mapMembers_t::size_type n;
     ar & n;
-    for ( vMembers_t::size_type ix = 0; ix < n; ++ix ) {
+    for ( mapMembers_t::size_type ix = 0; ix < n; ++ix ) {
       unsigned int type;
       ar & type;
       switch ( type ) {
@@ -89,12 +91,12 @@ private:
           ar & *p;
         }
         break;
-	case IdInstrument:
-	{
-          TreeItemInstrument* p = AddTreeItem<TreeItemInstrument,IdTreeItemType>( "Instrument", IdInstrument, m_resources );
-          ar & *p;
-	}
-	break;
+        case IdInstrument:
+        {
+                TreeItemInstrument* p = AddTreeItem<TreeItemInstrument,IdTreeItemType>( "Instrument", IdInstrument, m_resources );
+                ar & *p;
+        }
+        break;
       }
     }
   }
@@ -108,19 +110,19 @@ private:
 class TreeItemRoot: public TreeItemGroupCommon {
   friend class boost::serialization::access;
 public:
-  TreeItemRoot( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ): 
+  TreeItemRoot( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ):
     TreeItemGroupCommon( id, baseResources, resources ) {}
   virtual ~TreeItemRoot( void ) {}
-  
+
   virtual void ShowContextMenu( void );
-  
+
 protected:
 private:
 //  enum {
 //    ID_Null = wxID_HIGHEST,
 //    MIAddGroup
 //  };
-  
+
   template<typename Archive>
   void save( Archive& ar, const unsigned int version ) const {
     ar & boost::serialization::base_object<const TreeItemGroupCommon>(*this);
@@ -140,15 +142,15 @@ private:
 class TreeItemGroup: public TreeItemGroupCommon {
   friend class boost::serialization::access;
 public:
-  TreeItemGroup( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ): 
+  TreeItemGroup( wxTreeItemId id, ou::tf::TreeItemResources& baseResources, Resources& resources ):
     TreeItemGroupCommon( id, baseResources, resources ) {}
   virtual ~TreeItemGroup( void ) {}
-  
+
   virtual void ShowContextMenu( void );
-  
+
 protected:
 private:
-  
+
   void HandleDelete( wxCommandEvent& event );
 
   template<typename Archive>

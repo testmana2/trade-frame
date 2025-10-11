@@ -13,10 +13,12 @@
 
 #pragma once
 
+// by including TFTrading/Managers.h in the .cpp file
+//   all standard tables are constructed and maintained
+//   by the respective subject matter manager
+
 #include <OUCommon/FastDelegate.h>
 using namespace fastdelegate;
-
-#include "Database.h"
 
 #include <TFTrading/KeyTypes.h>
 
@@ -28,9 +30,9 @@ namespace tf { // TradeFrame
 class DBOps: public ou::db::Session {
 public:
 
-  DBOps(void);
-  ~DBOps(void);
-  
+  DBOps();
+  virtual ~DBOps();
+
   typedef Instrument::idInstrument_cref idInstrument_cref;
   //typedef Instrument::idInstrument_t idInstrument_t;
 

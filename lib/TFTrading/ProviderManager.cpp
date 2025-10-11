@@ -11,15 +11,14 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <stdexcept>
 
-#include "ProviderManager.h"
-
-#include <TFIQFeed/IQFeedProvider.h>
+#include <TFIQFeed/Provider.h>
+//#include <TFAlpaca/Provider.hpp>
 #include <TFInteractiveBrokers/IBTWS.h>
-#include <TFSimulation/SimulationProvider.h>
+#include <TFSimulation/SimulationProvider.hpp>
+
+#include "ProviderManager.h"
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
@@ -28,14 +27,17 @@ ProviderManager::pProvider_t ProviderManager::Construct( const idProvider_t& key
   pProvider_t pProvider;
   switch ( type ) {
   case keytypes::EProviderIB:
-    pProvider = Construct<IBTWS>( key );
+    pProvider = Construct<ou::tf::ib::TWS>( key );
     break;
   case keytypes::EProviderIQF:
-    pProvider = Construct<IQFeedProvider>( key );
+    pProvider = Construct<ou::tf::iqfeed::Provider>( key );
     break;
   case keytypes::EProviderSimulator:
     pProvider = Construct<SimulationProvider>( key );
     break;
+  //case keytypes::EProviderAlpaca: // use manual registration instead
+  //  pProvider = Construct<ou::tf::alpaca::Provider>( key );
+  //  break;
   case keytypes::EProviderGNDT:
     throw std::runtime_error( "GNDT not implemented" );
     break;
@@ -44,13 +46,24 @@ ProviderManager::pProvider_t ProviderManager::Construct( const idProvider_t& key
 }
 
 void ProviderManager::Register( const idProvider_t& key, pProvider_t pProvider ) {
-
   if ( m_mapProviders.end() != m_mapProviders.find( key ) ) {
     throw std::runtime_error( "ProviderManager::Register, provider already exists" );
   }
   pProvider->SetName( key );
   m_mapProviders.insert( mapProviders_pair_t( key, pProvider ) );
+}
 
+void ProviderManager::Register( pProvider_t pProvider ) {
+
+  const idProvider_t& key( pProvider->GetName() );
+  assert( 0 < key.size() );
+
+  if ( m_mapProviders.end() == m_mapProviders.find( key ) ) {
+    m_mapProviders.insert( mapProviders_pair_t( key, pProvider ) );
+  }
+  else {
+    throw std::runtime_error( "ProviderManager::Register, provider already exists" );
+  }
 }
 
 void ProviderManager::Release( const idProvider_t& key ) {

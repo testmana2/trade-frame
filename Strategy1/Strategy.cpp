@@ -234,7 +234,7 @@ void Strategy::Start( void ) {  // live trading
 
 void Strategy::Start( const std::string& sSymbolPath ) {  // simulated trading
 
-  m_sim = boost::dynamic_pointer_cast<ou::tf::SimulationProvider>( m_pExecutionProvider );
+  m_sim = ou::tf::SimulationProvider::Cast( m_pExecutionProvider );
 
   m_sim->SetGroupDirectory( "/app/semiauto/2012-Jul-22 18:08:14.285807" );
 
@@ -243,7 +243,6 @@ void Strategy::Start( const std::string& sSymbolPath ) {  // simulated trading
   //m_sim->SetGroupDirectory( "/app/semiauto/2011-Nov-06 18:54:22.184889" );
   //m_sim->SetGroupDirectory( "/app/semiauto/2011-Nov-07 18:53:31.016760" );
   //m_sim->SetGroupDirectory( "/app/semiauto/2011-Nov-08 18:58:29.396624" );
-//  m_sim->SetExecuteAgainst( ou::tf::CSimulateOrderExecution::EAQuotes );
 
   m_dtEnd = boost::posix_time::ptime( date( 2012, 7, 23 ), time_duration( 17, 45, 0 ) );  // put in time start
   

@@ -12,48 +12,50 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <iostream>
-
-#include <math.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-#include <boost/phoenix/bind/bind_member_function.hpp>
-#include <boost/lexical_cast.hpp>
-#include <boost/bind.hpp>
-#include <boost/filesystem.hpp>
-#include <boost/timer/timer.hpp>
-
-#include <boost/foreach.hpp>
-
-#include <wx/mstream.h>
-#include <wx/bitmap.h>
-#include <wx/splitter.h>
+#include <wx/frame.h>
+#include <wx/sizer.h>
 #include <wx/panel.h>
+#include <wx/textdlg.h>
+#include <wx/splitter.h>
 
-#include <OUCommon/TimeSource.h>
+#include <TFVuTrading/TreeItem.hpp>
 
-//#include <TFTrading/InstrumentManager.h>
-//#include <TFTrading/AccountManager.h>
-//#include <TFTrading/OrderManager.h>
+#include "LiveChart.hpp"
 
-//#include <TFHDF5TimeSeries/HDF5IterateGroups.h>
-
-//#include <TFOptions/CalcExpiry.h>
-
-#include "LiveChart.h"
+namespace {
+  static const std::string c_sVendorName(      "One Unified Net Limited" );
+  static const std::string c_sAppTitle(        "LiveChart" );
+  static const std::string c_sAppNamePrefix(   "livechart" );
+  static const std::string c_sChoicesFilename( c_sAppNamePrefix + ".cfg" );
+  static const std::string c_sStateFileName(   c_sAppNamePrefix + ".state" );
+  static const std::string c_sDbName(          c_sAppNamePrefix + ".db" );
+}
 
 IMPLEMENT_APP(AppLiveChart)
 
-size_t atm = 125;
-
 bool AppLiveChart::OnInit() {
 
-//  m_pdm = new ou::tf::HDF5DataManager( ou::tf::HDF5DataManager::RO );
+  wxApp::SetAppDisplayName( c_sAppTitle );
+  wxApp::SetVendorName( c_sVendorName );
+  wxApp::SetVendorDisplayName( "(C)2025 " + c_sVendorName );
 
-  m_pFrameMain = new FrameMain( 0, wxID_ANY, "LiveChart" );
+  if ( !wxApp::OnInit() ) {
+    return false;
+  }
+
+  if ( config::Load( c_sChoicesFilename, m_choices ) ) {
+    auto size = m_choices.vSymbol.size();
+    if ( 0 == size ) {
+      std::cout << "symbols required" << std::endl;
+      return false;
+    }
+  }
+
+  m_pFrameMain = new FrameMain( 0, wxID_ANY, c_sAppTitle );
   wxWindowID idFrameMain = m_pFrameMain->GetId();
   //m_pFrameMain->Bind( wxEVT_SIZE, &AppStrategy1::HandleFrameMainSize, this, idFrameMain );
   //m_pFrameMain->Bind( wxEVT_MOVE, &AppStrategy1::HandleFrameMainMove, this, idFrameMain );
@@ -63,9 +65,9 @@ bool AppLiveChart::OnInit() {
   SetTopWindow( m_pFrameMain );
 
   // Sizer for FrameMain
-  wxBoxSizer* m_sizerMain;
-  m_sizerMain = new wxBoxSizer(wxVERTICAL);
-  m_pFrameMain->SetSizer(m_sizerMain);
+  wxBoxSizer* sizerFrame;
+  sizerFrame = new wxBoxSizer(wxVERTICAL);
+  m_pFrameMain->SetSizer( sizerFrame );
 
   // splitter
   wxSplitterWindow* splitter;
@@ -74,18 +76,29 @@ bool AppLiveChart::OnInit() {
   splitter->SetSashGravity(0.2);
 
   // tree
-  //wxTreeCtrl* tree;
-  m_pHdf5Root = new wxTreeCtrl( splitter );
-  m_eLatestDatumType = CustomItemData::NoDatum;
-  wxTreeItemId idRoot = m_pHdf5Root->AddRoot( "/", -1, -1, new CustomItemData( CustomItemData::Root, m_eLatestDatumType ) );
-//  m_pHdf5Root->Bind( wxEVT_COMMAND_TREE_SEL_CHANGED, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId() );
-  //m_pFrameMain->Bind( wxEVT_COMMAND_TREE_ITEM_ACTIVATED, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId() );
-//  m_pFrameMain->Bind( wxEVT_COMMAND_TREE_ITEM_ACTIVATED, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId()  );
-//  m_pFrameMain->Bind( wxEVT_COMMAND_TREE_SEL_CHANGED, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId()  );
-//  m_pFrameMain->Bind( wxEVT_COMMAND_TREE_ITEM_RIGHT_CLICK, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId()  );
-//  m_pFrameMain->Bind( wxEVT_COMMAND_TREE_ITEM_MENU, &AppLiveChart::HandleTreeEventItemActivated, this, m_pHdf5Root->GetId()  );
-//  tree->AppendItem( idRoot, "second" );
-//  tree->AppendItem( idRoot, "third" );
+  m_pTreeChart = new wxTreeCtrl( splitter );
+  m_ptiRoot = new ou::tf::TreeItem( m_pTreeChart, "charts" );
+  m_ptiRoot->SetOnClick(
+    [this]( ou::tf::TreeItem* ){
+      m_pWinChartView->SetChartDataView( nullptr );
+    } );
+  m_ptiRoot->SetOnBuildPopUp(
+    [this]( ou::tf::TreeItem* pti ){
+      pti->NewMenu();
+      pti->AppendMenuItem(
+        "Add Symbol",
+        [this]( ou::tf::TreeItem* pti ){
+          wxTextEntryDialog dialog( m_pFrameMain, "Symbol Name:", "Add Symbol" );
+          //dialog->ForceUpper(); // prints charters in reverse
+          if ( wxID_OK == dialog.ShowModal() ) {
+            std::string sSymbolName = dialog.GetValue().Upper();
+            if ( 0 < sSymbolName.size() ) {
+              AddSymbol( Chart::EType::dynamic, sSymbolName );
+            }
+          }
+        } );
+    } );
+  ou::tf::TreeItem::Bind( splitter, m_pTreeChart );
 
   // panel for right side of splitter
   wxPanel* panelSplitterRightPanel;
@@ -97,47 +110,34 @@ bool AppLiveChart::OnInit() {
   panelSplitterRightPanel->SetSizer( sizerRight );
 
   // Sizer for Controls
-  wxBoxSizer* m_sizerControls;
-  m_sizerControls = new wxBoxSizer( wxHORIZONTAL );
+  wxBoxSizer* sizerControls;
+  sizerControls = new wxBoxSizer( wxHORIZONTAL );
   //m_sizerMain->Add( m_sizerControls, 0, wxEXPAND|wxLEFT|wxTOP|wxRIGHT, 5 );
   //panelSplitterRight->SetSizer( m_sizerControls );
-  sizerRight->Add( m_sizerControls, 0, wxStretch::wxEXPAND|wxALL, 5 );
+  sizerRight->Add( sizerControls, 0, wxStretch::wxEXPAND|wxALL, 5 );
 
   // populate variable in FrameWork01
   m_pPanelProviderControl = new ou::tf::PanelProviderControl( panelSplitterRightPanel, wxID_ANY );
-  m_sizerControls->Add( m_pPanelProviderControl, 0, wxALIGN_LEFT|wxRIGHT, 5);
+  sizerControls->Add( m_pPanelProviderControl, 0, wxALIGN_LEFT|wxRIGHT, 5);
 //  m_pPanelProviderControl->Show( true );
 
   LinkToPanelProviderControl();
 
   m_pPanelLogging = new ou::tf::PanelLogging( panelSplitterRightPanel, wxID_ANY );
-  m_sizerControls->Add( m_pPanelLogging, 1, wxALL | wxEXPAND|wxALIGN_LEFT|wxALIGN_RIGHT|wxALIGN_TOP|wxALIGN_BOTTOM, 0);
+  sizerControls->Add( m_pPanelLogging, 1, wxALL | wxEXPAND, 0);
 //  m_pPanelLogging->Show( true );
 
-  splitter->SplitVertically( m_pHdf5Root, panelSplitterRightPanel, 0 );
-  m_sizerMain->Add( splitter, 1, wxGROW|wxALL, 5 );
+  splitter->SplitVertically( m_pTreeChart, panelSplitterRightPanel, 0 );
+  sizerFrame->Add( splitter, 1, wxGROW|wxALL, 5 );
 
-  m_pChart = 0;
-  m_bPaintingChart = false;
-  m_bReadyToDrawChart = false;
-  m_winChart = new wxWindow( panelSplitterRightPanel, wxID_ANY, wxDefaultPosition, wxDefaultSize, wxNO_BORDER );
-  sizerRight->Add( m_winChart, 1, wxALL|wxEXPAND, 5);
-  wxWindowID idChart = m_winChart->GetId();
-  m_winChart->Bind( wxEVT_PAINT, &AppLiveChart::HandlePaint, this, idChart );
-  m_winChart->Bind( wxEVT_SIZE, &AppLiveChart::HandleSize, this, idChart );
+  m_pWinChartView = new ou::tf::WinChartView( panelSplitterRightPanel, wxID_ANY );
+
+  sizerRight->Add( m_pWinChartView, 1, wxALL|wxEXPAND, 5);
 
   wxBoxSizer* m_sizerStatus = new wxBoxSizer( wxHORIZONTAL );
-  m_sizerMain->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
+  sizerFrame->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
 
   m_pFrameMain->Show( true );
-
-  m_bData1Connected = false;
-  m_bData2Connected = false;
-  m_bExecConnected = false;
-
-  m_timerGuiRefresh.SetOwner( this );
-
-  Bind( wxEVT_TIMER, &AppLiveChart::HandleGuiRefresh, this, m_timerGuiRefresh.GetId() );
 
   m_pFrameMain->Bind( wxEVT_CLOSE_WINDOW, &AppLiveChart::OnClose, this );  // start close of windows and controls
 
@@ -145,7 +145,7 @@ bool AppLiveChart::OnInit() {
   if ( !boost::filesystem::exists( sTimeZoneSpec ) ) {
     std::cout << "Required file does not exist:  " << sTimeZoneSpec << std::endl;
   }
-  
+
 //  m_db.Open( sDbName );
 
   FrameMain::vpItems_t vItems;
@@ -154,105 +154,80 @@ bool AppLiveChart::OnInit() {
 //  vItems.push_back( new mi( "a2 New Symbol List Local", MakeDelegate( this, &AppLiveChart::HandleMenuAction1ObtainNewIQFeedSymbolListLocal ) ) );
 //  vItems.push_back( new mi( "a3 Load Symbol List", MakeDelegate( this, &AppLiveChart::HandleMenuAction2LoadIQFeedSymbolList ) ) );
 //  vItems.push_back( new mi( "b1 Initialize Symbols", MakeDelegate( this, &AppLiveChart::HandleMenuActionInitializeSymbolSet ) ) );
-  vItems.push_back( new mi( "c1 Start Watch", MakeDelegate( this, &AppLiveChart::HandleMenuActionStartWatch ) ) );
-  vItems.push_back( new mi( "c2 Start Chart", MakeDelegate( this, &AppLiveChart::HandleMenuActionStartChart ) ) );
-  vItems.push_back( new mi( "c3 Stop Watch", MakeDelegate( this, &AppLiveChart::HandleMenuActionStopWatch ) ) );
+//  vItems.push_back( new mi( "c1 Start Watch", MakeDelegate( this, &AppLiveChart::HandleMenuActionStartWatch ) ) );
+//  vItems.push_back( new mi( "c2 Start Chart", MakeDelegate( this, &AppLiveChart::HandleMenuActionStartChart ) ) );
+//  vItems.push_back( new mi( "c3 Stop Watch", MakeDelegate( this, &AppLiveChart::HandleMenuActionStopWatch ) ) );
   vItems.push_back( new mi( "d1 Save Values", MakeDelegate( this, &AppLiveChart::HandleMenuActionSaveValues ) ) );
 //  vItems.push_back( new mi( "e1 Libor Yield Curve", MakeDelegate( this, &AppLiveChart::HandleMenuActionEmitYieldCurve ) ) );
 //  vItems.push_back( new mi( "e1 Load Tree", MakeDelegate( this, &AppLiveChart::HandleMenuActionLoadTree ) ) );
   m_pFrameMain->AddDynamicMenu( "Actions", vItems );
 
-  this->m_pData1Provider->Connect();
-
-  return 1;
-
-}
-
-void AppLiveChart::HandleMenuActionStartChart( void ) {
-  m_bReadyToDrawChart = true;
-  m_pChart = new ChartTest( m_pData1Provider );
-
-//  m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
-}
-
-void AppLiveChart::HandlePaint( wxPaintEvent& event ) {
-  if ( m_bReadyToDrawChart && !m_bPaintingChart ) {
-    try {
-      m_bPaintingChart = true;
-      wxSize size = m_winChart->GetClientSize();
-      m_chartMaster.SetChartDimensions( size.GetWidth(), size.GetHeight() );
-      m_chartMaster.SetChartDataView( &m_pChart->GetChartDataView() );
-      m_chartMaster.SetOnDrawChart( MakeDelegate( this, &AppLiveChart::HandleDrawChart ) );
-      m_chartMaster.DrawChart( );
-    }
-    catch (...) {
-    }
-  }
-  m_bPaintingChart = false;
-}
-
-void AppLiveChart::HandleSize( wxSizeEvent& event ) { 
-  m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
-}
-
-// http://www.chartdir.com/forum/download_thread.php?bn=chartdir_support&thread=1144757575#N1144760096
-void AppLiveChart::HandleDrawChart( const MemBlock& m ) {
-  wxMemoryInputStream in( m.data, m.len );
-  wxBitmap bmp( wxImage( in, wxBITMAP_TYPE_BMP) );
-  wxPaintDC cdc( m_winChart );
-  cdc.DrawBitmap(bmp, 0, 0);
-}
-
-void AppLiveChart::HandleGuiRefresh( wxTimerEvent& event ) {
-
-  if ( 0 != m_pChart ) {
-    ptime now = ou::TimeSource::Instance().External();
-    static boost::posix_time::time_duration::fractional_seconds_type fs( 1 );
-    boost::posix_time::time_duration td( 0, 0, 0, fs - now.time_of_day().fractional_seconds() );
-    ptime dtEnd = now + td; 
-    static boost::posix_time::time_duration tdLength( 0, 10, 0 );
-    ptime dtBegin = dtEnd - tdLength;
-    m_pChart->GetChartDataView().SetViewPort( dtBegin, dtEnd );
-
-    m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
+  for ( const config::Choices::vSymbol_t::value_type& vt: m_choices.vSymbol ) {
+    AddSymbol( Chart::EType::config, vt );
   }
 
+  m_pData1Provider->Connect();
+
+  CallAfter(
+    [this](){
+      LoadState();
+    }
+  );
+
+  return true;
 }
 
-void AppLiveChart::HandleMenuActionStartWatch( void ) {
-/*
-  m_pBundle->StartWatch();
-
-  m_bIVCalcActive = false;
-  ptime dt;
-  ou::TimeSource::Instance().Internal( &dt );
-  m_dtTopOfMinute = dt + time_duration( 0, 1, 0 ) - time_duration( 0, 0, dt.time_of_day().seconds() );
-  */
-  m_timerGuiRefresh.Start( 250 );
+void AppLiveChart::AddSymbol( Chart::EType type, const std::string& sName ) {
+  mapChart_t::iterator iter = m_mapChart.find( sName );
+  if ( m_mapChart.end() != iter ) {
+    std::cout << "duplicate symbol: " << sName << std::endl;
+  }
+  else {
+    auto result = m_mapChart.emplace( sName, Chart( type ) );
+    assert( result.second );
+    iter = result.first;
+    Chart& chart( iter->second );
+    chart.m_pChartData = new ChartData( m_pData1Provider, sName );
+    chart.m_pti = m_ptiRoot->AppendChild(
+      sName
+    , [this,pcdv = chart.m_pChartData->GetChartDataView()]( ou::tf::TreeItem* pti ){ // fOnClick_t
+      m_pWinChartView->SetChartDataView( pcdv );
+      }
+    , [this,iter]( ou::tf::TreeItem* pti ){// fOnBuildPopUp
+      pti->NewMenu();
+      pti->AppendMenuItem(
+        "Delete",
+        [this,iter]( ou::tf::TreeItem* pti ){
+          CallAfter(
+            [this,iter](){
+              Chart& chart( iter->second );
+              chart.m_pti->Delete();
+              if ( m_pWinChartView->GetChartDataView() == chart.m_pChartData->GetChartDataView() ) {
+                m_pWinChartView->SetChartDataView( nullptr );
+              }
+              m_mapChart.erase( iter );
+            } );
+        });
+      }
+  );
+  }
 }
 
-void AppLiveChart::HandleMenuActionStopWatch( void ) {
-
-  m_timerGuiRefresh.Stop();
-
-//  m_pBundle->StopWatch();
-
-}
-
-void AppLiveChart::HandleMenuActionSaveValues( void ) {
+void AppLiveChart::HandleMenuActionSaveValues() {
   m_worker.Run( MakeDelegate( this, &AppLiveChart::HandleSaveValues ) );
 }
 
-void AppLiveChart::HandleSaveValues( void ) {
+void AppLiveChart::HandleSaveValues() {
   std::cout << "Saving collected values ... " << std::endl;
   try {
     //std::string sPrefixSession( "/app/LiveChart/" + m_sTSDataStreamStarted + "/" + m_pBundle->Name() );
     //std::string sPrefix86400sec( "/bar/86400/AtmIV/" + iter->second.sName.substr( 0, 1 ) + "/" + iter->second.sName );
     //std::string sPrefix86400sec( "/bar/86400/AtmIV/" + m_pBundle->Name() );
     //m_pBundle->SaveData( sPrefixSession, sPrefix86400sec );
-    std::string sPrefixSession( "/app/LiveChart/" + m_sTSDataStreamStarted + "/" 
-      + m_pChart->GetWatch()->GetInstrument()->GetInstrumentName() );
-    m_pChart->GetWatch()->SaveSeries( sPrefixSession );
+    const std::string sPrefix( "/app/livechart/" + m_sTSDataStreamStarted );
+    for ( const mapChart_t::value_type& vt: m_mapChart ) {
+      vt.second.m_pChartData->SaveSeries( sPrefix );
+    }
   }
   catch(...) {
     std::cout << " ... issues with saving ... " << std::endl;
@@ -263,28 +238,21 @@ void AppLiveChart::HandleSaveValues( void ) {
 int AppLiveChart::OnExit() {
   // Exit Steps: #4
 //  DelinkFromPanelProviderControl();  generates stack errors
-  //m_timerGuiRefresh.Stop();
-  this->m_pData1Provider->Disconnect();
-//  m_listIQFeedSymbols.Clear();
-  if ( m_db.IsOpen() ) m_db.Close();
-
-//  delete m_pdm;
-//  m_pdm = 0;
+  //if ( m_db.IsOpen() ) m_db.Close();
 
   return wxAppConsole::OnExit();
 }
 
-//void AppWeeklies::HandlePanelFocusPropogate( unsigned int ix ) {
-//}
-
-
 void AppLiveChart::OnClose( wxCloseEvent& event ) {
   // Exit Steps: #2 -> FrameMain::OnClose
-  m_timerGuiRefresh.Stop();
+  this->m_pData1Provider->Disconnect();
   DelinkFromPanelProviderControl();
 //  if ( 0 != OnPanelClosing ) OnPanelClosing();
-  // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+
+  SaveState();
+
+  m_mapChart.clear();
+
   event.Skip();  // auto followed by Destroy();
 }
 
@@ -326,15 +294,36 @@ void AppLiveChart::OnExecDisconnected( int ) {
   m_bExecConnected = false;
 }
 
-void AppLiveChart::HandleRegisterTables(  ou::db::Session& session ) {
+void AppLiveChart::SaveState() {
+  std::cout << "Saving Config ..." << std::endl;
+  std::ofstream ofs( c_sStateFileName );
+  boost::archive::text_oarchive oa(ofs);
+  oa & *this;
+  std::cout << "  done." << std::endl;
 }
 
-void AppLiveChart::HandleRegisterRows(  ou::db::Session& session ) {
+void AppLiveChart::LoadState() {
+  try {
+    std::cout << "Loading Config ..." << std::endl;
+    std::ifstream ifs( c_sStateFileName );
+    boost::archive::text_iarchive ia(ifs);
+    ia & *this;
+    std::cout << "  done." << std::endl;
+  }
+  catch(...) {
+    std::cout << "load exception" << std::endl;
+  }
 }
 
-void AppLiveChart::HandlePopulateDatabase( void ) {
+//void AppLiveChart::HandleRegisterTables(  ou::db::Session& session ) {
+//}
+
+//void AppLiveChart::HandleRegisterRows(  ou::db::Session& session ) {
+//}
+
 /*
-  ou::tf::AccountManager::pAccountAdvisor_t pAccountAdvisor 
+void AppLiveChart::HandlePopulateDatabase() {
+  ou::tf::AccountManager::pAccountAdvisor_t pAccountAdvisor
     = ou::tf::AccountManager::Instance().ConstructAccountAdvisor( "aaRay", "Raymond Burkholder", "One Unified" );
 
   ou::tf::AccountManager::pAccountOwner_t pAccountOwner
@@ -350,12 +339,12 @@ void AppLiveChart::HandlePopulateDatabase( void ) {
     = ou::tf::AccountManager::Instance().ConstructAccount( "sim01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderSimulator, "Sim", "acctid", "login", "password" );
 
   m_pPortfolioMaster
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::Instance().ConstructPortfolio(
     "Master", "aoRay", "", ou::tf::Portfolio::Master, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
 
   m_pPortfolioCurrencyUSD
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
+    = ou::tf::PortfolioManager::Instance().ConstructPortfolio(
     "USD", "aoRay", "Master", ou::tf::Portfolio::CurrencySummary, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
-*/
 }
+*/
 

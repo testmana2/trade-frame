@@ -13,59 +13,105 @@
 
 #pragma once
 
+#include <vector>
 #include <string>
+#include <functional>
+
+#include <boost/format.hpp>
+
+// Note, that there is a wxChartDir wrapper!
+// https://github.com/utelle/wxchartdir
+// https://www.wxwidgets.org/blog/2018/08/wxchartdir-using-chartdirector-in-wxwidgets-applications/
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
-#include <OUCommon/FastDelegate.h>
-using namespace fastdelegate;
-
-#include "ChartDataView.h"
+class MultiChart;
+class XYChart;
+class MemBlock;
+class DrawArea;
 
 namespace ou { // One Unified
 
+class ChartDataView;
+
 class ChartMaster  {
 public:
-  ChartMaster(void);
+  ChartMaster();
   ChartMaster( unsigned int width, unsigned int height );
-  virtual ~ChartMaster(void);
-  void SetChartDimensions( unsigned int width, unsigned int height);
-  //void SetChartTitle( std::string sChartTitle ) { m_sChartTitle = sChartTitle; };
-  void SetChartDataView( ChartDataView* pcdv ) { m_pCdv = pcdv; if ( NULL != pcdv ) m_pCdv->SetChanged(); };
-  ChartDataView* GetChartDataView( void ) { return m_pCdv; };
+  virtual ~ChartMaster();
 
-  // can use not_a_date_time for one, the other, or both
-  void SetViewPort( boost::posix_time::ptime dtBegin, boost::posix_time::ptime dtEnd );
+  void SetChartDataView( ChartDataView* pcdv );
+  ChartDataView* GetChartDataView() const { return m_pCdv; };
+
   void SetBarWidth( boost::posix_time::time_duration tdBarWidth );
 
-  bool GetChartDataViewChanged( void ) { return ( NULL == m_pCdv ) ? false : m_pCdv->GetChanged(); };  // flag is reset during call
-  void DrawChart( bool bViewPortChanged = false );  // recalc viewport zoom effects when true
-  bool isCreated( void ) const { return m_bCreated; };
+  void SetChartDimensions( unsigned int width, unsigned int height);
+  void DrawChart();
 
-  typedef FastDelegate1<const MemBlock&> OnDrawChart_t;
-  void SetOnDrawChart( OnDrawChart_t function ) {
-    m_OnDrawChart = function;
+  using fOnDrawChart_t = std::function<void( bool bCursor, const MemBlock& )>;
+  void SetOnDrawChart( fOnDrawChart_t&& function ) {
+    m_fOnDrawChart = std::move( function );
   }
+
+  void SetCrossHairPosition( int x, int y );
+  void SetCrossHairTime( const std::string& );
+  void CrossHairDraw( bool );
+
+  void GetWorldCoordX( int& nChart, double& dblX ) const { nChart = m_nChart; dblX = m_dblX; }
+  void GetWorldCoordY( int& nChart, double& dblY ) const { nChart = m_nChart; dblY = m_dblY; }
+  void GetX( int& left, int& x, int& right ) const {
+    left = m_xLeft;  x = m_xX; right = m_xRight;
+  }
+
 protected:
 
-  //std::string m_sChartTitle;  // data view has this information
   unsigned int m_nChartWidth;
   unsigned int m_nChartHeight;
-  ChartDataView* m_pCdv;
-
-  double m_dblViewPortXBegin;  // initial data time stamp
-  double m_dblViewPortXEnd;  // last data time stamp
 
   boost::posix_time::time_duration m_tdBarWidth;
 
-  OnDrawChart_t m_OnDrawChart;
-
-  bool m_bCreated;
-
+  fOnDrawChart_t m_fOnDrawChart;
 
 private:
 
-  void Initialize( void );
+  ChartDataView* m_pCdv;
+  std::unique_ptr<MultiChart> m_pChart;
+
+  using pXYChart_t = std::unique_ptr<XYChart>;
+  using vSubChart_t = std::vector<pXYChart_t>;
+
+  vSubChart_t m_vSubCharts;
+
+  boost::format m_formatter;
+
+  XYChart* m_pXY0;
+  DrawArea* m_pDA;
+
+  bool m_bHasData;
+
+  int m_intCrossHairX, m_intCrossHairY;
+  bool m_bCrossHair;
+
+  int m_nChart;
+  double m_dblX; // date time
+  double m_dblY; // chart specific value
+
+  int m_xLeft;  // coord of left side of chart
+  int m_xX;     // coord of mouse on chart
+  int m_xRight; // coord of right side of chart
+
+  char m_szCursorTime[ 100 ]; // place time at cursor
+
+  void Initialize();
+
+  void ChartStructure();
+  void ChartData( XYChart* );
+
+  bool DrawDynamicLayer(); // true if cross hairs
+
+  void RenderChart();
+
+  bool ResetDynamicLayer();
 
 };
 

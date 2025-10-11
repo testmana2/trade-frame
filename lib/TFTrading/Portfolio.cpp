@@ -10,9 +10,7 @@
  *                                                                      *
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
-#include "stdafx.h"
 
-#include <sstream>
 #include <stdexcept>
 
 #include "Portfolio.h"
@@ -20,7 +18,7 @@
 // 2013/07/25
 // * position currency must match portfolio currency
 // * currency ratio between from sub-portfolio and portfolio needs to be maintained
-// * top level portfolio is always raio 1
+// * top level portfolio is always ratio 1
 // * first level of sub-portfolios can be alternate currency, and have non one ratio
 // * also portfolio type as 'multi-legged position'
 // * no further level sub-portfolios can have different currency
@@ -29,28 +27,24 @@
 namespace ou { // One Unified
 namespace tf { // TradeFrame
 
-
 //Portfolio::Portfolio( // in memory
-//  const idPortfolio_t& idPortfolio, EPortfolioType ePortfolioType, currency_t sCurrency, const std::string& sDescription ) 
-//: m_row( idPortfolio, "", "", ePortfolioType, sCurrency, sDescription ),
-//  m_bCanUseDb( false )
+//  const idPortfolio_t& idPortfolio, EPortfolioType ePortfolioType, currency_t sCurrency, const std::string& sDescription )
+//: m_row( idPortfolio, "", "", ePortfolioType, sCurrency, sDescription )
 //{
 //}
 
 //Portfolio::Portfolio( // master portfolio currency record
-//  const idPortfolio_t& idPortfolio, 
+//  const idPortfolio_t& idPortfolio,
 //  const idAccountOwner_t& idAccountOwner, currency_t sCurrency,
-//  const std::string& sDescription ) 
-//: m_row( idPortfolio, idAccountOwner, "", Master, sCurrency, sDescription ), 
-//  m_bCanUseDb( true )
+//  const std::string& sDescription )
+//: m_row( idPortfolio, idAccountOwner, "", Master, sCurrency, sDescription )
 //{
 //}
 
 Portfolio::Portfolio( // portfolio record
   const idPortfolio_t& idPortfolio, const idAccountOwner_t& idAccountOwner, const idPortfolio_t& idOwner,
-   EPortfolioType ePortfolioType, currency_t sCurrency, const std::string& sDescription ) 
-: m_row( idPortfolio, idAccountOwner, idOwner, ePortfolioType, sCurrency, sDescription ),
-  m_bCanUseDb( true )
+   EPortfolioType ePortfolioType, currency_t sCurrency, const std::string& sDescription )
+: m_row( idPortfolio, idAccountOwner, idOwner, ePortfolioType, sCurrency, sDescription )
 {
   bool bOk = true;
   if ( "" == idPortfolio ) bOk = false;
@@ -61,8 +55,8 @@ Portfolio::Portfolio( // portfolio record
   }
 }
 
-Portfolio::Portfolio( const TableRowDef& row ) 
-  : m_row( row ), m_bCanUseDb( true )
+Portfolio::Portfolio( const TableRowDef& row )
+  : m_row( row )
 {
   m_plCurrent.dblCommissionsPaid = m_row.dblCommissionsPaid;
   m_plCurrent.dblRealized = m_row.dblRealizedPL;
@@ -78,19 +72,10 @@ Portfolio::pPosition_t Portfolio::AddPosition( const std::string &sName, pPositi
   // prepare to add position to user named map
   mapPositions_iter_t iterUser = m_mapPositionsViaUserName.find( sName );
   if ( m_mapPositionsViaUserName.end() != iterUser ) {
-    throw std::runtime_error( "Portfolio::Add1 position already exists" );
-  }
-
-  // prepare to add position to instrument named map
-  // instrument can only have one position associated with it
-  const std::string& sInstrumentName( pPosition->GetInstrument()->GetInstrumentName() );
-  mapPositions_iter_t iterInst = m_mapPositionsViaInstrumentName.find( sInstrumentName );
-  if ( m_mapPositionsViaInstrumentName.end() != iterInst ) {
-    throw std::runtime_error( "Portfolio::Add2 position already exists" );
+    throw std::runtime_error( "Portfolio::Add1 position " + sName + " already exists" );
   }
 
   m_mapPositionsViaUserName.insert( mapPositions_pair_t( sName, pPosition ) );
-  m_mapPositionsViaInstrumentName.insert( mapPositions_pair_t( sInstrumentName, pPosition ) );
 
   pPosition->OnUnRealizedPL.Add( MakeDelegate( this, &Portfolio::HandleUnRealizedPL ) );
   pPosition->OnExecution.Add( MakeDelegate( this, &Portfolio::HandleExecution ) );
@@ -106,19 +91,11 @@ void Portfolio::DeletePosition( const std::string& sName ) {
     throw std::runtime_error( "Portfolio::Delete1 position does not exist" );
   }
 
-  const std::string& sInstrumentName( iterUser->second->GetInstrument()->GetInstrumentName() );
-  mapPositions_iter_t iterInst = m_mapPositionsViaInstrumentName.find( sInstrumentName );
-  if ( m_mapPositionsViaInstrumentName.end() == iterInst ) {
-    throw std::runtime_error( "Portfolio::Delete2 position does not exist" );
-  }
-
   iterUser->second->OnCommission.Remove( MakeDelegate( this, &Portfolio::HandleCommission ) );
   iterUser->second->OnExecution.Remove( MakeDelegate( this, &Portfolio::HandleExecution ) );
   iterUser->second->OnUnRealizedPL.Remove( MakeDelegate( this, &Portfolio::HandleUnRealizedPL ) );
 
   m_mapPositionsViaUserName.erase( iterUser );
-  m_mapPositionsViaInstrumentName.erase( iterInst );
-
 }
 
 void Portfolio::RenamePosition( const std::string& sOld, const std::string& sNew ) {
@@ -177,7 +154,7 @@ void Portfolio::AddSubPortfolio( pPortfolio_t& pPortfolio ) {
     if ( Master == m_row.ePortfolioType ) {
       // if this portfolio is master, no problem
     }
-    else { 
+    else {
       // if sub portfolio is currency summary portfolio, and this isn't master, then this needs to be master portfolio
       if ( CurrencySummary == pPortfolio->GetRow().ePortfolioType ) {
         throw std::runtime_error( "Portfolio::AddSubPortfolio: alternate currency portfolio only attachable to master portfolio" );
@@ -223,7 +200,7 @@ void Portfolio::SetOwnerPortfolio( const idPortfolio_t& idOwner, pPortfolio_t& p
   m_pOwnerPortfolio = pPortfolio;
 }
 */
-// as positions and portfolios get attached, they should perform an initial update of 
+// as positions and portfolios get attached, they should perform an initial update of
 //   unrealized, realized, & commission (if non-zero)
 
 void Portfolio::HandleUnRealizedPL( const PositionDelta_delegate_t& position ) {
@@ -273,24 +250,28 @@ void Portfolio::HandleCommission( const PositionDelta_delegate_t& position ) {
 
 }
 
-//void Portfolio::EmitStats( std::stringstream& ss ) {
 std::ostream& operator<<( std::ostream& os, const Portfolio& portfolio ) {
-  for ( Portfolio::mapPositions_t::const_iterator iter = portfolio.m_mapPositionsViaUserName.begin(); 
-    portfolio.m_mapPositionsViaUserName.end() != iter; 
+  for ( Portfolio::mapPositions_t::const_iterator iter = portfolio.m_mapPositionsViaUserName.begin();
+    portfolio.m_mapPositionsViaUserName.end() != iter;
     ++iter ) {
       os << iter->second;
-//    iter->second->EmitStatus( ss );
   }
+
   os << "Portfolio URPL=" << portfolio.m_plCurrent.dblUnRealized
-    << ", RPL=" << portfolio.m_plCurrent.dblRealized 
+    << ", RPL=" << portfolio.m_plCurrent.dblRealized
     << ", Comm=" << portfolio.m_plCurrent.dblCommissionsPaid
     << "=> PL-C=" << portfolio.m_plCurrent.dblRealized - portfolio.m_plCurrent.dblCommissionsPaid
     << ": Min=" << portfolio.m_plMin.dblNet
     << ", Net=" << portfolio.m_plCurrent.dblNet
     << ", Max=" << portfolio.m_plMax.dblNet
-    << std::endl
     ;
   return os;
+}
+
+void Portfolio::SetActive( bool bActive ) {
+  if ( bActive != m_row.bActive ) {
+    m_row.bActive = bActive;
+  }
 }
 
 } // namespace tf

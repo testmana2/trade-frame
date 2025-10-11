@@ -16,33 +16,33 @@
 
 // Started 2013/09/23
 
+#include <wx/app.h>
 #include <wx/timer.h>
-#include <wx/treectrl.h>
 
 #include <OUCommon/Worker.h>
 
-#include <TFVuTrading/WinChartView.h>
+#include <OUCharting/ChartDataView.h>
+#include <OUCharting/ChartMaster.h>
 
 #include <TFBitsNPieces/FrameWork01.h>
 
-#include <OUCharting/ChartMaster.h>
-
 #include <TFTrading/DBOps.h>
 #include <TFTrading/PortfolioManager.h>
-#include <TFTrading/NoRiskInterestRateSeries.h>
+
 #include <TFOptions/Bundle.h>
+#include <TFOptions/NoRiskInterestRateSeries.h>
 
 #include <TFIQFeed/LoadMktSymbols.h>
 
 #include <TFVuTrading/FrameMain.h>
 #include <TFVuTrading/PanelLogging.h>
 //#include <TFVuTrading/PanelManualOrder.h>
-
-#include <OUCommon/Worker.h>
+#include <TFVuTrading/WinChartView.h>
 
 #include "EventUpdateOptionTree.h"
-#include "EventDrawChart.h"
 #include "Strategy1.h"
+
+class wxTreeCtrl;
 
 class AppHedgedBollinger:
   public wxApp, public ou::tf::FrameWork01<AppHedgedBollinger> {
@@ -69,10 +69,9 @@ private:
 //  PanelOptionsParameters* m_pPanelOptionsParameters;
   ou::tf::PanelLogging* m_pPanelLogging;
 //  ou::tf::PanelManualOrder* m_pPanelManualOrder;
-  
-  ou::tf::WinChartView m_winChartView;
 
   ou::ChartMaster m_chart;
+  ou::tf::WinChartView* m_pWinChartView;
 
   Strategy* m_pStrategy;
 
@@ -87,8 +86,9 @@ private:
 
   wxTimer m_timerGuiRefresh;
   ptime m_dtTopOfMinute;
+
+  static const unsigned int m_nthIVCalc;
   unsigned int m_cntIVCalc;  // calc IV every nth gui refresh
-  static unsigned int m_nthIVCalc;
   volatile bool m_bIVCalcActive;
 
   wxTreeCtrl* m_ptreeChartables;  // http://docs.wxwidgets.org/trunk/classwx_tree_ctrl.html
@@ -112,7 +112,7 @@ private:
   void HandleGuiRefresh( wxTimerEvent& event );
 
   void UpdateTree( ou::tf::option::Option*, bool bWatching );
-    
+
   //void AutoStartCollection( void );
 
   void OnData1Connected( int );
@@ -124,28 +124,28 @@ private:
 
   void CalcIV( ptime dt );
 
-  void HandleMenuAction0ObtainNewIQFeedSymbolListRemote( void );
-  void HandleMenuAction1ObtainNewIQFeedSymbolListLocal( void );
-  void HandleMenuAction2LoadIQFeedSymbolList( void );
-  void HandleMenuActionInitializeSymbolSet( void );
-  void HandleMenuActionSaveSymbolSubset( void );
-  void HandleMenuActionLoadSymbolSubset( void );
-  void HandleMenuActionStartWatch( void );
-  void HandleMenuActionStopWatch( void );
-  void HandleMenuActionSaveValues( void );
-  void HandleMenuActionEmitYieldCurve( void );
-  void HandleMenuActionStartChart( void );
-  void HandleMenuActionStopChart( void );
-  void HandleMenuActionEmitStrategyValues( void );
+  void HandleMenuAction0ObtainNewIQFeedSymbolListRemote();
+  void HandleMenuAction1ObtainNewIQFeedSymbolListLocal();
+  void HandleMenuAction2LoadIQFeedSymbolList();
+  void HandleMenuActionInitializeSymbolSet();
+  void HandleMenuActionSaveSymbolSubset();
+  void HandleMenuActionLoadSymbolSubset();
+  void HandleMenuActionStartWatch();
+  void HandleMenuActionStopWatch();
+  void HandleMenuActionSaveValues();
+  void HandleMenuActionEmitYieldCurve();
+  void HandleMenuActionStartChart();
+  void HandleMenuActionStopChart();
+  void HandleMenuActionEmitStrategyValues();
 
-  void HandleIBUnderlyingContractDetails( const ou::tf::IBTWS::ContractDetails&, pInstrument_t& );
-  void HandleIBUnderlyingContractDetailsDone( void );
+  void HandleIBUnderlyingContractDetails( const ou::tf::ib::TWS::ContractDetails&, pInstrument_t& );
+  void HandleIBUnderlyingContractDetailsDone( bool );
   void FinishStrategyInitialization( pInstrument_t pInstrumentUnderlying );
 
-  void HandleObtainNewIQFeedSymbolListRemote( void );
-  void HandleObtainNewIQFeedSymbolListLocal( void );
-  void HandleLoadIQFeedSymbolList( void );
-  void HandleSaveValues( void );
+  void HandleObtainNewIQFeedSymbolListRemote();
+  void HandleObtainNewIQFeedSymbolListLocal();
+  void HandleLoadIQFeedSymbolList();
+  void HandleSaveValues();
 
 //  void HandleDrawChart( const MemBlock& );
   void HandlePaint( wxPaintEvent& event );

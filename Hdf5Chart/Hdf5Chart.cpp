@@ -12,115 +12,103 @@
  * See the file LICENSE.txt for redistribution information.             *
  ************************************************************************/
 
-#include "stdafx.h"
-
 #include <iostream>
 
-#include <math.h>
+#include <boost/log/trivial.hpp>
 
-#include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/lexical_cast.hpp>
-//#include <boost/filesystem.hpp>
-#include <boost/timer/timer.hpp>
+#include <boost/archive/text_iarchive.hpp>
+#include <boost/archive/text_oarchive.hpp>
 
-#include <boost/foreach.hpp>
+#include <wx/sizer.h>
+#include <wx/filedlg.h>
 
-#include "Hdf5Chart.h"
+#include <TFVuTrading/FrameMain.h>
+#include <TFVuTrading/PanelLogging.h>
+#include <TFVuTrading/PanelChartHdf5.hpp>
+
+#include "Hdf5Chart.hpp"
+
+namespace {
+  static const std::string c_sAppName( "Hdf5Chart" );
+  static const std::string c_sVendorName( "One Unified Net Limited" );
+  static const std::string c_sStateFileName = "Hdf5Chart.state";
+  static const std::string c_sChoicesFilename( c_sAppName + ".cfg" );
+}
 
 IMPLEMENT_APP(AppHdf5Chart)
 
 bool AppHdf5Chart::OnInit() {
 
-  m_pFrameMain = new FrameMain( 0, wxID_ANY, "Hdf5 Chart" );
+  wxApp::SetVendorName( c_sVendorName );
+  wxApp::SetAppDisplayName( c_sAppName );
+  wxApp::SetVendorDisplayName( "(c)2024 " + c_sVendorName );
+
+  if ( !wxApp::OnInit() ) {
+    return false;
+  }
+
+  if ( config::Load( c_sChoicesFilename, m_choices ) ) {
+    m_sHdf5FileName = m_choices.m_sHdf5File;
+    if ( boost::filesystem::exists( m_sHdf5FileName ) ) {}
+    else {
+      BOOST_LOG_TRIVIAL(error) << m_sHdf5FileName << " does not exist";
+      return false;
+    }
+  }
+  else {
+    // choices is default to tradeframe.hdf5
+  }
+
+  m_pFrameMain = new FrameMain( nullptr, wxID_ANY, "Hdf5 Chart" );
   wxWindowID idFrameMain = m_pFrameMain->GetId();
-  //m_pFrameMain->Bind( wxEVT_SIZE, &AppStrategy1::HandleFrameMainSize, this, idFrameMain );
-  //m_pFrameMain->Bind( wxEVT_MOVE, &AppStrategy1::HandleFrameMainMove, this, idFrameMain );
-  //m_pFrameMain->Center();
-//  m_pFrameMain->Move( -2500, 50 );
   m_pFrameMain->SetSize( 800, 500 );
   SetTopWindow( m_pFrameMain );
 
   // Sizer for FrameMain
-  wxBoxSizer* m_sizerMain;
-  m_sizerMain = new wxBoxSizer(wxVERTICAL);
-  m_pFrameMain->SetSizer(m_sizerMain);
+  wxBoxSizer* sizerMain;
+  sizerMain = new wxBoxSizer(wxVERTICAL);
+  m_pFrameMain->SetSizer(sizerMain);
 
   // Sizer for Controls
   wxBoxSizer* m_sizerControls;
   m_sizerControls = new wxBoxSizer( wxHORIZONTAL );
-  m_sizerMain->Add( m_sizerControls, 0, wxEXPAND|wxLEFT|wxTOP|wxRIGHT, 5 );
-  //panelSplitterRight->SetSizer( m_sizerControls );
-  //sizerRight->Add( m_sizerControls, 0, wxStretch::wxEXPAND|wxALL, 5 );
-
-  // populate variable in FrameWork01
-  m_pPanelProviderControl = new ou::tf::PanelProviderControl( m_pFrameMain, wxID_ANY );
-  m_sizerControls->Add( m_pPanelProviderControl, 0, wxALIGN_LEFT|wxRIGHT, 5);
-//  m_pPanelProviderControl->Show( true );
-
-  LinkToPanelProviderControl();
+  sizerMain->Add( m_sizerControls, 0, wxEXPAND|wxLEFT|wxTOP|wxRIGHT, 5 );
 
   m_pPanelLogging = new ou::tf::PanelLogging( m_pFrameMain, wxID_ANY );
-  m_sizerControls->Add( m_pPanelLogging, 1, wxALL | wxEXPAND|wxALIGN_LEFT|wxALIGN_RIGHT|wxALIGN_TOP|wxALIGN_BOTTOM, 0);
-//  m_pPanelLogging->Show( true );
+  m_sizerControls->Add( m_pPanelLogging, 1, wxALL | wxEXPAND, 0);
+  m_pPanelLogging->SetMinSize( wxSize( wxID_ANY, 100 ) ); // minimum height
 
-  m_pPanelChartHdf5 = new ou::tf::PanelChartHdf5( m_pFrameMain, wxID_ANY );
-  m_sizerMain->Add( m_pPanelChartHdf5, 1, wxALL | wxEXPAND|wxALIGN_LEFT|wxALIGN_RIGHT|wxALIGN_TOP|wxALIGN_BOTTOM, 0);
-
-
-//  m_pPanelManualOrder = new ou::tf::PanelManualOrder( m_pFrameMain, wxID_ANY );
-//  m_sizerControls->Add( m_pPanelManualOrder, 0, wxEXPAND|wxALIGN_LEFT|wxRIGHT, 5);
-//  m_pPanelManualOrder->Show( true );
-
-/*
-  m_pPanelOptionsParameters = new PanelOptionsParameters( m_pFrameMain, wxID_ANY );
-  m_sizerControls->Add( m_pPanelOptionsParameters, 1, wxEXPAND|wxALIGN_LEFT, 0);
-  m_pPanelOptionsParameters->Show( true );
-  m_pPanelOptionsParameters->SetOnStart( MakeDelegate( this, &AppStrategyRunner::HandleBtnStart ) );
-  m_pPanelOptionsParameters->SetOnStop( MakeDelegate( this, &AppStrategyRunner::HandleBtnStop ) );
-  m_pPanelOptionsParameters->SetOnSave( MakeDelegate( this, &AppStrategyRunner::HandleBtnSave ) );
-  m_pPanelOptionsParameters->SetOptionNearDate( boost::gregorian::date( 2012, 4, 20 ) );
-  m_pPanelOptionsParameters->SetOptionFarDate( boost::gregorian::date( 2012, 6, 15 ) );
-*/
+  m_pPanelChartHdf5 = new ou::tf::PanelChartHdf5( m_sHdf5FileName );
+  m_pPanelChartHdf5->Create( m_pFrameMain, wxID_ANY );
+  //m_pPanelChartHdf5 = new ou::tf::PanelChartHdf5( m_pFrameMain, wxID_ANY );
+  sizerMain->Add( m_pPanelChartHdf5, 1, wxALL | wxEXPAND, 0);
 
   wxBoxSizer* m_sizerStatus = new wxBoxSizer( wxHORIZONTAL );
-  m_sizerMain->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
-
-  m_pFrameMain->Show( true );
+  sizerMain->Add( m_sizerStatus, 1, wxEXPAND|wxALL, 5 );
 
   m_bData1Connected = false;
   m_bData2Connected = false;
   m_bExecConnected = false;
 
-  m_timerGuiRefresh.SetOwner( this );
-
-  //Bind( wxEVT_TIMER, &AppLiveChart::HandleGuiRefresh, this, m_timerGuiRefresh.GetId() );
-
   m_pFrameMain->Bind( wxEVT_CLOSE_WINDOW, &AppHdf5Chart::OnClose, this );  // start close of windows and controls
 
-//  m_pPanelManualOrder->SetOnNewOrderHandler( MakeDelegate( this, &AppPhi::HandlePanelNewOrder ) );
-//  m_pPanelManualOrder->SetOnSymbolTextUpdated( MakeDelegate( this, &AppPhi::HandlePanelSymbolText ) );
-//  m_pPanelManualOrder->SetOnFocusPropogate( MakeDelegate( this, &AppPhi::HandlePanelFocusPropogate ) );
+  const std::string sOldFileName( m_sHdf5FileName );
+  LoadState();
+  m_pFrameMain->Layout();
+  if ( sOldFileName != m_sHdf5FileName ) {
+    m_pPanelChartHdf5->SetFileName( m_sHdf5FileName );
+  }
 
-  // maybe set scenario with database and with in memory data structure
-  //m_idPortfolio = boost::gregorian::to_iso_string( boost::gregorian::day_clock::local_day() ) + "phi";
-//  m_idPortfolio = "weeklies";  // makes it easy for swing trading
+  m_pFrameMain->Show( true ); // triggers the auto move
 
 //  std::string sTimeZoneSpec( "date_time_zonespec.csv" );
 //  if ( !boost::filesystem::exists( sTimeZoneSpec ) ) {
 //    std::cout << "Required file does not exist:  " << sTimeZoneSpec << std::endl;
 //  }
-  
-//  std::string sDbName( "HedgedBollingerX.db" );
-//  if ( boost::filesystem::exists( sDbName ) ) {
-//    boost::filesystem::remove( sDbName );
-//  }
 
-
-//  m_db.OnRegisterTables.Add( MakeDelegate( this, &AppLiveChart::HandleRegisterTables ) );
-//  m_db.OnRegisterRows.Add( MakeDelegate( this, &AppLiveChart::HandleRegisterRows ) );
-//  m_db.SetOnPopulateDatabaseHandler( MakeDelegate( this, &AppLiveChart::HandlePopulateDatabase ) );
-
-//  m_db.Open( sDbName );
+  int ixItem;
+  ixItem = m_pFrameMain->AddFileMenuItem( _( "Select HDF5 File" ) );
+  m_pFrameMain->Bind( wxEVT_COMMAND_MENU_SELECTED, &AppHdf5Chart::HandleSelectHdf5File, this, ixItem, -1 );
 
   FrameMain::vpItems_t vItems;
   typedef FrameMain::structMenuItem mi;  // vxWidgets takes ownership of the objects
@@ -129,59 +117,72 @@ bool AppHdf5Chart::OnInit() {
 
 //  this->m_pData1Provider->Connect();
 
-  return 1;
-
+  return true;
 }
 
-void AppHdf5Chart::HandleGuiRefresh( wxTimerEvent& event ) {
-  //m_winChart->RefreshRect( m_winChart->GetClientRect(), false );
+void AppHdf5Chart::HandleSelectHdf5File( wxCommandEvent& event ) {
+  CallAfter(
+    [this](){
+      wxFileDialog
+        openFileDialog(
+          m_pFrameMain,
+          _("Select HDF5 file"),
+          "", // default dir
+          m_sHdf5FileName, // default file
+          "HDF5 files (*.hdf5)|*.hdf5",
+          wxFD_OPEN|wxFD_FILE_MUST_EXIST
+        );
+      if ( wxID_CANCEL == openFileDialog.ShowModal() ) {}
+      else {
+        m_sHdf5FileName = openFileDialog.GetPath();
+        std::cout << "hdf5 file selected " << m_sHdf5FileName << std::endl;
+        m_pPanelChartHdf5->SetFileName( m_sHdf5FileName );
+      }
+    } );
+}
 
-  // Process IV Calc once a minute
-/*
-  ptime dt;
-  // need to deal with market closing time frame on expiry friday, no further calcs after market close on that day
-  ou::TimeSource::Instance().Internal( &dt );
-  if ( dt > m_dtTopOfMinute ) {
-    m_dtTopOfMinute = dt + time_duration( 0, 1, 0 ) - time_duration( 0, 0, dt.time_of_day().seconds(), dt.time_of_day().fractional_seconds() );
-    std::cout << "Current: " << dt << " Next: " << m_dtTopOfMinute << std::endl;
-    if ( !m_bIVCalcActive ) {
-      if ( 0 != m_pIVCalc ) delete m_pIVCalc;
-      m_bIVCalcActive = true;
-      m_pIVCalc = new boost::thread( boost::bind( &AppLiveChart::CalcIV, this, dt ) );
-    }
+void AppHdf5Chart::SaveState() {
+  std::cout << "Saving Config ..." << std::endl;
+  std::ofstream ofs( c_sStateFileName );
+  boost::archive::text_oarchive oa(ofs);
+  oa & *this;
+  std::cout << "  done." << std::endl;
+}
+
+void AppHdf5Chart::LoadState() {
+  try {
+    std::cout << "Loading Config ..." << std::endl;
+    std::ifstream ifs( c_sStateFileName );
+    boost::archive::text_iarchive ia(ifs);
+    ia & *this;
+    std::cout << "  done." << std::endl;
   }
-  */
+  catch(...) {
+    std::cout << "load exception" << std::endl;
+  }
 }
 
 int AppHdf5Chart::OnExit() {
+  std::cout << "AppHdf5Chart::OnExit" << std::endl;
   // Exit Steps: #4
-//  DelinkFromPanelProviderControl();  generates stack errors
-  //m_timerGuiRefresh.Stop();
-//  this->m_pData1Provider->Disconnect();
-  if ( m_db.IsOpen() ) m_db.Close();
 
   return wxAppConsole::OnExit();
 }
 
-//void AppWeeklies::HandlePanelFocusPropogate( unsigned int ix ) {
-//}
-
-
 void AppHdf5Chart::OnClose( wxCloseEvent& event ) {
+  std::cout << "AppHdf5Chart::OnClose" << std::endl;
   // Exit Steps: #2 -> FrameMain::OnClose
-  m_timerGuiRefresh.Stop();
-  DelinkFromPanelProviderControl();
 //  if ( 0 != OnPanelClosing ) OnPanelClosing();
   // event.Veto();  // possible call, if needed
-  // event.CanVeto(); // if not a 
+  // event.CanVeto(); // if not a
+
+  SaveState();
+
   event.Skip();  // auto followed by Destroy();
 }
 
 void AppHdf5Chart::OnData1Connected( int ) {
   m_bData1Connected = true;
-  //ou::tf::libor::SetWatchOn( m_pData1Provider );
-//  m_libor.SetWatchOn( m_pData1Provider );
-//  AutoStartCollection();
   if ( m_bData1Connected & m_bExecConnected ) {
     // set start to enabled
   }
@@ -189,7 +190,6 @@ void AppHdf5Chart::OnData1Connected( int ) {
 
 void AppHdf5Chart::OnData2Connected( int ) {
   m_bData2Connected = true;
-//  AutoStartCollection();
   if ( m_bData2Connected & m_bExecConnected ) {
     // set start to enabled
   }
@@ -203,7 +203,6 @@ void AppHdf5Chart::OnExecConnected( int ) {
 }
 
 void AppHdf5Chart::OnData1Disconnected( int ) {
-//  m_libor.SetWatchOff();
   m_bData1Connected = false;
 }
 
@@ -214,37 +213,3 @@ void AppHdf5Chart::OnData2Disconnected( int ) {
 void AppHdf5Chart::OnExecDisconnected( int ) {
   m_bExecConnected = false;
 }
-
-void AppHdf5Chart::HandleRegisterTables(  ou::db::Session& session ) {
-}
-
-void AppHdf5Chart::HandleRegisterRows(  ou::db::Session& session ) {
-}
-
-void AppHdf5Chart::HandlePopulateDatabase( void ) {
-/*
-  ou::tf::AccountManager::pAccountAdvisor_t pAccountAdvisor 
-    = ou::tf::AccountManager::Instance().ConstructAccountAdvisor( "aaRay", "Raymond Burkholder", "One Unified" );
-
-  ou::tf::AccountManager::pAccountOwner_t pAccountOwner
-    = ou::tf::AccountManager::Instance().ConstructAccountOwner( "aoRay", "aaRay", "Raymond", "Burkholder" );
-
-  ou::tf::AccountManager::pAccount_t pAccountIB
-    = ou::tf::AccountManager::Instance().ConstructAccount( "ib01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIB, "Interactive Brokers", "acctid", "login", "password" );
-
-  ou::tf::AccountManager::pAccount_t pAccountIQFeed
-    = ou::tf::AccountManager::Instance().ConstructAccount( "iq01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderIQF, "IQFeed", "acctid", "login", "password" );
-
-  ou::tf::AccountManager::pAccount_t pAccountSimulator
-    = ou::tf::AccountManager::Instance().ConstructAccount( "sim01", "aoRay", "Raymond Burkholder", ou::tf::keytypes::EProviderSimulator, "Sim", "acctid", "login", "password" );
-
-  m_pPortfolioMaster
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
-    "Master", "aoRay", "", ou::tf::Portfolio::Master, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
-
-  m_pPortfolioCurrencyUSD
-    = ou::tf::PortfolioManager::Instance().ConstructPortfolio( 
-    "USD", "aoRay", "Master", ou::tf::Portfolio::CurrencySummary, ou::tf::Currency::Name[ ou::tf::Currency::USD ], "Hedged Bollinger" );
-*/
-}
-

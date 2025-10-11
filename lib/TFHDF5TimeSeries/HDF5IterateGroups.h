@@ -44,7 +44,7 @@ public:
 
   typedef FastDelegate2<const std::string&,const std::string&> OnObjectHandler_t;  // objectpath, objectname
 
-  HDF5IterateGroups( void ) {};
+  HDF5IterateGroups() {};
 
   void SetOnHandleObject( OnObjectHandler_t handler ) {
     HandleObject = handler;;
@@ -57,7 +57,7 @@ public:
     HDF5DataManager dm( HDF5DataManager::RO );
     m_sBaseGroup = sBaseGroup;
     int idx = 0;  // starting location for interrupted queries
-    int result = dm.GetH5File()->iterateElems( sBaseGroup, &idx, &HDF5IterateCallback, this );  
+    int result = dm.GetH5File()->iterateElems( sBaseGroup, &idx, &HDF5IterateCallback, this );
     return result;
   }
 
@@ -80,7 +80,7 @@ private:
     try {
       dm.GetH5File()->getObjinfo( sObjectPath, stats );
       switch ( stats.type ) {
-        case H5G_DATASET: 
+        case H5G_DATASET:
           try {
             if ( NULL != HandleObject ) HandleObject( sObjectPath, sObjectName );
           }
@@ -114,7 +114,7 @@ private:
   static herr_t HDF5IterateCallback( hid_t group, const char *name, void *op_data ) {
     HDF5IterateGroups* pControl = ( HDF5IterateGroups *) op_data;
     pControl->Process( name );
-  return 0;  
+  return 0;
   }
 
 };
@@ -126,35 +126,34 @@ namespace hdf5 {
 IterateGroups Call example:
     #include <boost/phoenix/bind/bind_member_function.hpp>
     namespace args = boost::phoenix::placeholders;
-    ou::tf::hdf5::IterateGroups ig( 
-      "/bar/86400", 
-      boost::phoenix::bind( &AppScanner::HandleHdf5Group, this, args::arg1, args::arg2 ), 
-      boost::phoenix::bind( &AppScanner::HandleHdf5Object, this, args::arg1, args::arg2 ) 
+    ou::tf::hdf5::IterateGroups ig(
+      "/bar/86400",
+      boost::phoenix::bind( &AppScanner::HandleHdf5Group, this, args::arg1, args::arg2 ),
+      boost::phoenix::bind( &AppScanner::HandleHdf5Object, this, args::arg1, args::arg2 )
       );
 */
 class IterateGroups {
 public:
   typedef boost::function<void (const std::string&, const std::string& )> callback_t;
-  IterateGroups( const std::string& sBaseGroup, callback_t group, callback_t object ) 
-    : m_dm( HDF5DataManager::RO ), m_g( group ), m_o( object )
+  IterateGroups( HDF5DataManager& dm, const std::string& sBaseGroup, callback_t group, callback_t object )
+  : m_dm( dm ), m_sBaseGroup( sBaseGroup ), m_g( group ), m_o( object )
   {
-    m_sBaseGroup = sBaseGroup;
-    int idx = 0;  // starting location for interrupted queries
-    int result = m_dm.GetH5File()->iterateElems( sBaseGroup, &idx, &IterateGroups::IterateCallback, this );  
+    int idx {};  // starting location for interrupted queries
+    int result = m_dm.GetH5File()->iterateElems( m_sBaseGroup, &idx, &IterateGroups::IterateCallback, this );
   }
-  ~IterateGroups( void ) {};
+  ~IterateGroups() {};
 protected:
 private:
 
-  std::string m_sBaseGroup;
-  HDF5DataManager m_dm;
+  const std::string m_sBaseGroup;
+  HDF5DataManager& m_dm;
   callback_t m_g;
   callback_t m_o;
 
   static herr_t IterateCallback( hid_t group, const char *name, void *op_data ) {
     IterateGroups& ig( *reinterpret_cast<IterateGroups*>( op_data ) );
-    std::string sObjectName( name );
     std::string sObjectPath;
+    const std::string sObjectName( name );
     if ( '/' == ig.m_sBaseGroup[ ig.m_sBaseGroup.size() - 1 ] ) {
       sObjectPath = ig.m_sBaseGroup + sObjectName;
     }
@@ -165,32 +164,32 @@ private:
     try {
       ig.m_dm.GetH5File()->getObjinfo( sObjectPath, stats );
       switch ( stats.type ) {
-        case H5G_DATASET: 
+        case H5G_DATASET:
           try {
             ig.m_o( sObjectPath, name );
           }
           catch ( std::exception e ) {
-            std::cout << "HDF5::IterateGroups::Process Object " << sObjectName << " problem: " << e.what() << std::endl;
+            std::cout << "hdf5::IterateGroups::IterateCallback Object " << sObjectPath << "," << sObjectName << " problem: " << e.what() << std::endl;
           }
           catch (...) {
-            std::cout << "HDF5::IterateGroups::Process Object " << sObjectName << " unknown problems" << std::endl;
+            std::cout << "hdf5::IterateGroups::IterateCallback Object " << sObjectName << " unknown problems" << std::endl;
           }
           break;
         case H5G_GROUP: {
             sObjectPath.append( "/" );
             ig.m_g( sObjectPath, sObjectName );
-            IterateGroups igRecursive( sObjectPath, ig.m_g, ig.m_o );  // recursive call
+            IterateGroups igRecursive( ig.m_dm, sObjectPath, ig.m_g, ig.m_o );  // recursive call
           }
           break;
         default:
           break;
       }
     }
-    catch ( H5::Exception e ) {
-      std::cout << "HDF5::IterateGroups::Process H5::Exception " << e.getDetailMsg() << std::endl;
+    catch ( H5::Exception& e ) {
+      std::cerr << "hdf5::IterateGroups::IterateCallback H5::Exception " << e.getDetailMsg() << std::endl;
       e.walkErrorStack( H5E_WALK_DOWNWARD, (H5E_walk2_t) &HDF5DataManager::PrintH5ErrorStackItem, 0 );
     }
-    return 0;  
+    return 0;
   }
 
 };

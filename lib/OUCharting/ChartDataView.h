@@ -13,107 +13,126 @@
 
 #pragma once
 
+#include <map>
+#include <mutex>
 #include <vector>
 #include <string>
-#include <map>
-
-#include <OUCommon/Delegate.h>
+#include <functional>
 
 #include "ChartEntryBase.h"
 
 namespace ou { // One Unified
-namespace local {
 
-// ChartDataView contains the CChartEntries and related sub-chart 
-//   to be viewed in a master chart viewport 
-
-class ChartDataViewCarrier { // used by ChartViewPort objects to chart data
+// TODO: migrate to cpp file with forward declaration
+class ChartEntryCarrier { // used by ChartViewPort objects to chart data
 public:
   //ChartDataViewCarrier( void );
-  ChartDataViewCarrier( size_t nChart, ChartEntryBase* pChartEntry );
-//  ChartDataViewCarrier( ChartDataViewCarrier& carrier );
-  ~ChartDataViewCarrier( void );
-  size_t GetLogicalChartId( void ) const { return m_nLogicalChart; };
+  ChartEntryCarrier( size_t nChart, ChartEntryBase* pChartEntry );
+  ChartEntryCarrier( const ChartEntryCarrier& carrier );
+  ChartEntryCarrier( const ChartEntryCarrier&& carrier );
+  ~ChartEntryCarrier();
   void SetActualChartId( size_t ix ) { m_nActualChart = ix; };
-  size_t GetActualChartId( void ) const { return m_nActualChart; };
-  ChartEntryBase* GetChartEntry( void ) { return m_pChartEntry; };
+  size_t GetLogicalChartId() const { return m_nLogicalChart; };
+  size_t GetActualChartId() const { return m_nActualChart; };
+  ChartEntryBase* GetChartEntry() { return m_pChartEntry; };
+  const ChartEntryBase* GetChartEntry() const { return m_pChartEntry; };
 protected:
-  size_t m_nLogicalChart;  // as supplied by trading rules
-  size_t m_nActualChart;   // as supplied by CChartDataView management
-  ChartEntryBase* m_pChartEntry;
 private:
+  size_t m_nLogicalChart;  // as supplied by trading rules
+  size_t m_nActualChart;   // as supplied by ChartDataView management (monotonically increasing)
+  ChartEntryBase* m_pChartEntry;
 };
-
-} // local
 
 // nChart:  0, 1 reserved:
 //   0: main price chart
 //   1: main volume chart
 
+// ChartDataView contains the ChartEntries
+//   to be viewed in a master chart viewport
+
 class ChartDataView {
 public:
 
-  typedef std::vector<local::ChartDataViewCarrier>::const_iterator const_iterator;
-  typedef std::vector<local::ChartDataViewCarrier>::iterator iterator;
+  std::mutex m_mutex;
 
-  ChartDataView( void );
-  //ChartDataView( const std::string &sStrategy, const std::string &sName );
-  virtual ~ChartDataView(void);
+  using pChartDataView_t = std::shared_ptr<ChartDataView>;
+
+  using ViewPort_t = ChartEntryTime::range_t;
+
+  ChartDataView();
+  virtual ~ChartDataView();
+
+  static pChartDataView_t Factory() { return std::make_shared<ChartDataView>(); }
 
   void Add( size_t nChart, ChartEntryBase* pEntry );  // could try boost::fusion here?  some crtp stuff?
-  iterator begin( void ) { return m_vChartDataViewEntry.begin(); };
-  iterator end( void ) { return m_vChartDataViewEntry.end(); };
-  const std::string& GetStrategy( void ) const { return m_sStrategy; };
-  const std::string& GetName( void ) const { return m_sName; };
-  void Clear( void );  // remove stuff in order to reuse.
-  size_t GetChartCount( void ) const{ return m_mapCntChartIndexes.size(); };
-  void SetChanged(void) { m_bChanged = true; };
-  bool GetChanged(void) { bool b = m_bChanged; if ( b ) m_bChanged = false; return b; };
-
-  // should reprocess m_vChartDataViewEntry when these are called
-  void SetThreadSafe( bool bThreadSafe );
-  bool GetThreadSafe( void ) const  { return m_bThreadSafe; }
+  void Remove( size_t nChart, ChartEntryBase* pEntry );
+  void Clear();  // remove stuff in order to reuse.
 
   // can use not_a_date_time for one, the other, or both
   void SetViewPort( boost::posix_time::ptime dtBegin, boost::posix_time::ptime dtEnd );
-  void SetNames( const std::string& sStrategy, const std::string& sName ) {
-    m_sStrategy = sStrategy;
+  void SetViewPort( const ViewPort_t& );
+  ViewPort_t GetViewPort() const;
+
+  void SetNames( const std::string& sDescription, const std::string& sName ) {
+    m_sDescription = sDescription;
     m_sName = sName;
   }
+  const std::string& GetName() const { return m_sName; };
+  const std::string& GetDescription() const { return m_sDescription; };
+
+  ViewPort_t GetExtents();
+  boost::posix_time::ptime GetExtentBegin();
+  boost::posix_time::ptime GetExtentEnd();
+
+  size_t GetChartCount() const { return m_mapCntChartIndexes.size(); };
+
+  using fEachChartEntryCarrier_t = std::function<void( ChartEntryCarrier& )>;
+  void EachChartEntryCarrier( fEachChartEntryCarrier_t&& f ) {
+    for ( ChartEntryCarrier& carrier: m_vChartEntryCarrier ) {
+      f( carrier );
+    }
+  }
+
+  using fCursorDateTime_t = std::function<void( const boost::posix_time::ptime )>;
+  void SetNotifyCursorDateTime( fCursorDateTime_t&& f ) { m_fCursorDateTime = std::move( f ); }
+  void NotifyCursorDateTime( const boost::posix_time::ptime );
 
 protected:
-
 private:
 
+  // chart# from ChartEntry may not be monotonically increasing, ixActualChartId is forced to be so
   struct structChartMapping {
-    size_t ixActualChartId;  // actual chart index
-    size_t nCharts;  // number of charts at this index
-    explicit structChartMapping( void ) : ixActualChartId( 0 ), nCharts( 0 ) {};
-    explicit structChartMapping( const structChartMapping& obj ) 
-      : ixActualChartId( obj.ixActualChartId ), nCharts( obj.nCharts ) {};
-    structChartMapping& operator=( const structChartMapping &obj ) { 
-      ixActualChartId = obj.ixActualChartId; 
-      nCharts = obj.nCharts; 
-      return *this; 
+    size_t ixActualChartId;
+    size_t nChartEntries;  // number of ChartEntries for this Chart
+    structChartMapping() : ixActualChartId( 0 ), nChartEntries( 0 ) {};
+    explicit structChartMapping( const structChartMapping& rhs )
+      : ixActualChartId( rhs.ixActualChartId ), nChartEntries( rhs.nChartEntries ) {};
+    structChartMapping& operator=( const structChartMapping &rhs ) {
+      ixActualChartId = rhs.ixActualChartId;
+      nChartEntries = rhs.nChartEntries;
+      return *this;
     };
   };
 
-  //typedef std::map<size_t /* carrier nChart */, structChartMapping> mapCntChartIndexes_t;
-  typedef std::map<boost::uint64_t /* carrier nChart */, structChartMapping> mapCntChartIndexes_t;
-
-  typedef std::vector<local::ChartDataViewCarrier> vChartDataViewEntry_t;
-
-  bool m_bChanged;
-  bool m_bThreadSafe;   // propagated into ChartEntries for value append operations across thread boundaries
-  std::string m_sStrategy;
   std::string m_sName;
+  std::string m_sDescription;
+
+  fCursorDateTime_t m_fCursorDateTime;
 
   boost::posix_time::ptime m_dtViewPortBegin;
   boost::posix_time::ptime m_dtViewPortEnd;
 
+  using mapCntChartIndexes_t = std::map<size_t /* carrier nChart */, structChartMapping>;
   mapCntChartIndexes_t m_mapCntChartIndexes;  // how many of each carrier::m_nchart we have
 
-  vChartDataViewEntry_t m_vChartDataViewEntry;
+  using vChartEntryCarrier_t = std::vector<ChartEntryCarrier>;
+  vChartEntryCarrier_t m_vChartEntryCarrier;
+
+  ViewPort_t GetExtents_NoLock() const;
+  boost::posix_time::ptime GetExtentBegin_NoLock() const;
+  boost::posix_time::ptime GetExtentEnd_NoLock() const;
+
+  void UpdateActualChartId();
 
 };
 

@@ -17,11 +17,13 @@
 
 #include <string>
 #include <sstream>
+#include <iomanip>
 
 #include <boost/lexical_cast.hpp>
 
+#include <wx/string.h>
+
 #include <OUCommon/FastDelegate.h>
-using namespace fastdelegate;
 
 // this may cause problems or may result from problems if some other include hierarchy uses the file differently
 #define WINRGB
@@ -29,7 +31,7 @@ using namespace fastdelegate;
 
 // when ready for owner draw
 // depends upon amount of flicker
-// gtscalp/datarow (composition of elements), datarowelements(data change management), visibleelement (draw onto graphics area) for 
+// gtscalp/datarow (composition of elements), datarowelements(data change management), visibleelement (draw onto graphics area) for
 
 namespace ou { // One Unified
 namespace tf { // TradeFrame
@@ -44,21 +46,23 @@ template<typename CRTP> // CRTP, with conversion specifics, defines value_type.
 class ModelCell {
 public:
 
-  typedef typename ModelCell_traits<CRTP>::value_type value_type;
-  typedef FastDelegate1<const wxString&> FunctionSetText_t;
+  using value_type = typename ModelCell_traits<CRTP>::value_type;
+  using FunctionSetText_t = fastdelegate::FastDelegate1<const wxString&>;
 
-  ModelCell(void);
-  ModelCell(FunctionSetText_t);
-  virtual ~ModelCell(void);
+  ModelCell();
+  ModelCell( const ModelCell& rhs );
+  ModelCell( FunctionSetText_t );
+
+  virtual ~ModelCell();
 
   void SetValue( const value_type& val );
-  const value_type GetValue( void ) const { return m_val; };
+  const value_type GetValue() const { return m_val; };
 
   void SetFunctionSetText( FunctionSetText_t function ) {
     m_functionSetText = function;
   }
 
-  const wxString& GetText( void ) { 
+  const wxString& GetText() {
     if ( m_bChanged ) {
       Val2String();
       m_bChanged = false;
@@ -66,13 +70,13 @@ public:
     return m_sCellText;
   }
 
-  void UpdateGui( void );
+  void UpdateGui();
 
-  bool Changed( void ) const { return m_bChanged; }
+  bool Changed() const { return m_bChanged; }
 
   template<typename F>
   void UpdateGui( F f ) {
-    typedef void type;
+    using type = void;
     if ( m_bChanged ) {
       Val2String();
       f( m_sCellText );
@@ -84,8 +88,8 @@ protected:
   bool m_bChanged;  // may need a spinlock for this variable to handle background thread updates
   value_type m_val;
   wxString m_sCellText;
-  void Val2String( void );
-  void InitializeValue( void );
+  void Val2String();
+  void InitializeValue();
 private:
   FunctionSetText_t m_functionSetText;
 };
@@ -102,11 +106,11 @@ struct ModelCell_traits<ModelCellInt> {
 class ModelCellInt: public ModelCell<ModelCellInt> {
 public:
 
-  ModelCellInt( void ) {};
+  ModelCellInt() {};
   ModelCellInt(FunctionSetText_t function): ModelCell<ModelCellInt>( function ) {};
-  //~ModelCellInt( void );
+  //~ModelCellInt();
 
-  void InitializeValue( void ) { m_val = 0; }
+  void InitializeValue() { m_val = 0; }
 protected:
 private:
 };
@@ -124,21 +128,39 @@ class ModelCellDouble: public ModelCell<ModelCellDouble> {
   friend class ModelCell<ModelCellDouble>;
 public:
 
-  ModelCellDouble( void ): m_nPrecision( 2 ) {};
-  ModelCellDouble(FunctionSetText_t function): ModelCell<ModelCellDouble>( function ), m_nPrecision( 2 ) {};
-  //~ModelCellDouble( void );
+  ModelCellDouble(): m_nPrecision( 2 ) {
+    Initialize();
+  }
+  ModelCellDouble( const ModelCellDouble& rhs )
+  : m_nPrecision( rhs.m_nPrecision ) {
+    Initialize();
+  }
+  ModelCellDouble(FunctionSetText_t function): ModelCell<ModelCellDouble>( function ), m_nPrecision( 2 ) {
+    Initialize();
+  }
 
-  void InitializeValue( void ) { m_val = 0.0; }
+  virtual ~ModelCellDouble() {}
 
-  void SetPrecision( unsigned int n ) { m_nPrecision = n; };
+  void InitializeValue() { m_val = {}; }
+
+  void SetPrecision( unsigned int n ) {
+    m_nPrecision = n;
+  };
 protected:
 private:
   unsigned int m_nPrecision;
-  void Val2String( void ) {
-    std::stringstream ss;
-    ss.precision( m_nPrecision );
-    ss.setf( std::ios::fixed, std:: ios::floatfield );
-    ss << m_val;
+  std::stringstream ss;
+  void Initialize() {
+    // speed vs space optimization?
+    //ss.precision( m_nPrecision );
+    //ss.setf( std::ios::fixed, std:: ios::floatfield );
+  }
+  void Val2String() {
+    std::stringstream().swap(ss);
+    // ss.setf( std::ios::fixed, std:: ios::floatfield );
+    //ss.precision( m_nPrecision );
+    ss << std::setprecision(m_nPrecision) << std::fixed << m_val;
+    //ss << m_val;
     m_sCellText = ss.str();
   }
 };
@@ -155,11 +177,11 @@ struct ModelCell_traits<ModelCellString> {
 class ModelCellString: public ModelCell<ModelCellString> {
 public:
 
-  ModelCellString( void ) {};
+  ModelCellString() {};
   ModelCellString(FunctionSetText_t function): ModelCell<ModelCellString>( function ) {};
-  //~ModelCellInt( void );
+  //~ModelCellInt();
 
-  void Val2String( void ) { m_sCellText = m_val.c_str(); };
+  void Val2String() { m_sCellText = m_val.c_str(); };
 protected:
 private:
 };
@@ -167,21 +189,30 @@ private:
 // ======================
 
 template<typename CRTP>
-ModelCell<CRTP>::ModelCell( void )
-: m_bChanged( true ), m_functionSetText( 0 ) 
+ModelCell<CRTP>::ModelCell()
+: m_bChanged( true ), m_functionSetText( nullptr )
 { // gets initial value into gui
+  InitializeValue();
+}
+
+template<typename CRTP>
+ModelCell<CRTP>::ModelCell( const ModelCell<CRTP>& rhs )
+: m_bChanged( false ), m_val( rhs.m_val ),
+  m_functionSetText( rhs.m_functionSetText ),
+  m_sCellText( rhs.m_sCellText )
+{
   InitializeValue();
 }
 
 template<typename CRTP>
 ModelCell<CRTP>::ModelCell( FunctionSetText_t function )
-: m_bChanged( true ), m_functionSetText( function ) 
+: m_bChanged( true ), m_functionSetText( function )
 { // gets initial value into gui
   InitializeValue();
 }
 
 template<typename CRTP>
-ModelCell<CRTP>::~ModelCell(void) {
+ModelCell<CRTP>::~ModelCell() {
 }
 
 template<typename CRTP>
@@ -193,8 +224,8 @@ void ModelCell<CRTP>::SetValue( const value_type& val ) {
 }
 
 template<typename CRTP>
-void ModelCell<CRTP>::UpdateGui( void ) {
-  if ( m_bChanged && ( 0 != m_functionSetText ) ) {
+void ModelCell<CRTP>::UpdateGui() {
+  if ( m_bChanged && ( nullptr != m_functionSetText ) ) {
     Val2String();
     m_functionSetText( m_sCellText );
     m_bChanged = false;
@@ -202,18 +233,19 @@ void ModelCell<CRTP>::UpdateGui( void ) {
 }
 
 template<typename CRTP>
-void ModelCell<CRTP>::Val2String( void ) {
+void ModelCell<CRTP>::Val2String() {
   if ( &CRTP::Val2String != &ModelCell<CRTP>::Val2String ) {
     static_cast<CRTP*>(this)->Val2String();
   }
   else {
-    std::string s( boost::lexical_cast<std::string>( m_val ) ); 
+    std::string s( boost::lexical_cast<std::string>( m_val ) );
+    //wxString s( boost::lexical_cast<wxString>( m_val ) );
     m_sCellText = s.c_str();
   }
 }
 
 template<typename CRTP>
-void ModelCell<CRTP>::InitializeValue( void ) {
+void ModelCell<CRTP>::InitializeValue() {
   if ( &CRTP::InitializeValue != &ModelCell<CRTP>::InitializeValue ) {
     static_cast<CRTP*>(this)->InitializeValue();
   }
